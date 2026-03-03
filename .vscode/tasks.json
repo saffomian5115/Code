@@ -1,0 +1,87 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Start Backend",
+            "type": "shell",
+            "command": "cd backend && source venv/Scripts/activate && uvicorn main:app --reload",
+            "options": {
+                "shell": {
+                    "executable": "C:\\Program Files\\Git\\bin\\bash.exe",
+                    "args": ["-c"]
+                }
+            },
+            "problemMatcher": [],
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            }
+        },
+        {
+            "label": "Start Frontend",
+            "type": "shell",
+            "command": "cd frontend && npm run dev",
+            "options": {
+                "shell": {
+                    "executable": "C:\\Program Files\\Git\\bin\\bash.exe",
+                    "args": ["-c"]
+                }
+            },
+            "problemMatcher": [],
+            "group": "none",
+            "presentation": {
+                "reveal": "always",
+                "panel": "new"
+            }
+        },
+        {
+            "label": "Database Schema",
+            "type": "shell",
+            "command": "read -p 'Username (root): ' user; user=${user:-root}; read -s -p 'Password: ' pass; echo; mysql -u $user -p$pass < database/Schema.sql",
+            "options": {
+                "shell": {
+                    "executable": "C:\\Program Files\\Git\\bin\\bash.exe",
+                    "args": ["-c"]
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Database Seeds",
+            "type": "shell",
+            "command": "read -p 'Username (root): ' user; user=${user:-root}; read -s -p 'Password: ' pass; echo; mysql -u $user -p$pass AI_Driven_Smart_LMS < database/seeds/00_run_all_seeds.sql",
+            "options": {
+                "shell": {
+                    "executable": "C:\\Program Files\\Git\\bin\\bash.exe",
+                    "args": ["-c"]
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Install Backend Deps",
+            "type": "shell",
+            "command": "cd backend && python -m venv venv && source venv/Scripts/activate && pip install -r requirements.txt",
+            "options": {
+                "shell": {
+                    "executable": "C:\\Program Files\\Git\\bin\\bash.exe",
+                    "args": ["-c"]
+                }
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Install Frontend Deps",
+            "type": "shell",
+            "command": "cd frontend && npm install",
+            "options": {
+                "shell": {
+                    "executable": "C:\\Program Files\\Git\\bin\\bash.exe",
+                    "args": ["-c"]
+                }
+            },
+            "problemMatcher": []
+        }
+    ]
+}
