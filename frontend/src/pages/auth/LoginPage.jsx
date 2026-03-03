@@ -1,6 +1,14 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { Eye, EyeOff, GraduationCap, Loader2, Camera, X, ScanFace } from "lucide-react";
+import {
+  Eye,
+  EyeOff,
+  GraduationCap,
+  Loader2,
+  Camera,
+  X,
+  ScanFace,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import { FaceDetection } from "@mediapipe/face_detection";
 import { authAPI } from "../../api/auth.api";
@@ -8,25 +16,28 @@ import { authStore } from "../../store/authStore";
 
 // ─── Face Camera Modal ───────────────────────────────────
 function FaceCameraModal({ onClose, onSuccess }) {
-  const videoRef    = useRef(null);
-  const capCanvas   = useRef(null);
-  const overlayRef  = useRef(null);
-  const streamRef   = useRef(null);
+  const videoRef = useRef(null);
+  const capCanvas = useRef(null);
+  const overlayRef = useRef(null);
+  const streamRef = useRef(null);
   const detectorRef = useRef(null);
-  const loopRef     = useRef(null);
-  const timerRef    = useRef(null);
+  const loopRef = useRef(null);
+  const timerRef = useRef(null);
   const capturedRef = useRef(false);
 
-  const [status, setStatus]       = useState("loading");
+  const [status, setStatus] = useState("loading");
   const [countdown, setCountdown] = useState(null);
-  const [errorMsg, setErrorMsg]   = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
 
   // ─── Cleanup ─────────────────────────────────────────
   const stopAll = useCallback(() => {
-    if (loopRef.current)   cancelAnimationFrame(loopRef.current);
-    if (timerRef.current)  clearInterval(timerRef.current);
-    if (streamRef.current) streamRef.current.getTracks().forEach(t => t.stop());
-    try { detectorRef.current?.close(); } catch (_) {}
+    if (loopRef.current) cancelAnimationFrame(loopRef.current);
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (streamRef.current)
+      streamRef.current.getTracks().forEach((t) => t.stop());
+    try {
+      detectorRef.current?.close();
+    } catch (_) {}
   }, []);
 
   useEffect(() => () => stopAll(), [stopAll]);
@@ -42,7 +53,10 @@ function FaceCameraModal({ onClose, onSuccess }) {
           video: { width: 640, height: 480, facingMode: "user" },
           audio: false,
         });
-        if (!alive) { stream.getTracks().forEach(t => t.stop()); return; }
+        if (!alive) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
         streamRef.current = stream;
 
         const video = videoRef.current;
@@ -78,14 +92,15 @@ function FaceCameraModal({ onClose, onSuccess }) {
         const loop = async () => {
           if (!alive || capturedRef.current) return;
           if (video.readyState >= 2) {
-            try { await fd.send({ image: video }); } catch (_) {}
+            try {
+              await fd.send({ image: video });
+            } catch (_) {}
           }
           loopRef.current = requestAnimationFrame(loop);
         };
 
         setStatus("ready");
         loop();
-
       } catch (err) {
         if (alive) {
           console.error(err);
@@ -96,7 +111,10 @@ function FaceCameraModal({ onClose, onSuccess }) {
     }
 
     boot();
-    return () => { alive = false; stopAll(); };
+    return () => {
+      alive = false;
+      stopAll();
+    };
   }, [stopAll]);
 
   // ─── Draw bounding box ───────────────────────────────
@@ -104,7 +122,8 @@ function FaceCameraModal({ onClose, onSuccess }) {
     const cv = overlayRef.current;
     if (!cv) return;
     const ctx = cv.getContext("2d");
-    const W = cv.width, H = cv.height;
+    const W = cv.width,
+      H = cv.height;
     ctx.clearRect(0, 0, W, H);
     if (faces.length !== 1) return;
 
@@ -159,9 +178,19 @@ function FaceCameraModal({ onClose, onSuccess }) {
 
       // Capture WITHOUT mirror — dlib ko real orientation chahiye
       const cv = capCanvas.current;
-      cv.width  = Math.round(pw);
+      cv.width = Math.round(pw);
       cv.height = Math.round(ph);
-      cv.getContext("2d").drawImage(video, px, py, pw, ph, 0, 0, cv.width, cv.height);
+      cv.getContext("2d").drawImage(
+        video,
+        px,
+        py,
+        pw,
+        ph,
+        0,
+        0,
+        cv.width,
+        cv.height,
+      );
       const base64 = cv.toDataURL("image/jpeg", 0.92);
 
       stopAll();
@@ -182,7 +211,6 @@ function FaceCameraModal({ onClose, onSuccess }) {
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-slate-900 rounded-2xl w-full max-w-md shadow-2xl border border-white/10 overflow-hidden">
-
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-white/10">
           <div className="flex items-center gap-3">
@@ -191,18 +219,24 @@ function FaceCameraModal({ onClose, onSuccess }) {
             </div>
             <div>
               <p className="text-white font-semibold text-sm">Face Login</p>
-              <p className="text-white/40 text-xs">Camera ke samne apna chehra rakho</p>
+              <p className="text-white/40 text-xs">
+                Camera ke samne apna chehra rakho
+              </p>
             </div>
           </div>
-          <button onClick={() => { stopAll(); onClose(); }}
-            className="p-2 hover:bg-white/10 rounded-xl transition-colors">
+          <button
+            onClick={() => {
+              stopAll();
+              onClose();
+            }}
+            className="p-2 hover:bg-white/10 rounded-xl transition-colors"
+          >
             <X size={18} className="text-white/60" />
           </button>
         </div>
 
         {/* Viewport */}
         <div className="relative bg-black" style={{ aspectRatio: "4/3" }}>
-
           {status === "loading" && (
             <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3">
               <Loader2 size={32} className="text-blue-400 animate-spin" />
@@ -227,25 +261,33 @@ function FaceCameraModal({ onClose, onSuccess }) {
                 <p className="text-white/50 text-sm">{errorMsg}</p>
               </div>
               <button
-                onClick={() => { stopAll(); onClose(); }}
-                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium">
+                onClick={() => {
+                  stopAll();
+                  onClose();
+                }}
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-sm font-medium"
+              >
                 Dobara Try Karo
               </button>
             </div>
           )}
 
           {/* Live video — mirrored */}
-          <video ref={videoRef}
+          <video
+            ref={videoRef}
             className="w-full h-full object-cover"
             style={{ transform: "scaleX(-1)" }}
-            playsInline muted
+            playsInline
+            muted
           />
 
           {/* Bounding box canvas — same mirror */}
-          <canvas ref={overlayRef}
+          <canvas
+            ref={overlayRef}
             className="absolute inset-0 w-full h-full pointer-events-none"
             style={{ transform: "scaleX(-1)" }}
-            width={640} height={480}
+            width={640}
+            height={480}
           />
 
           {/* Hidden capture canvas — no mirror */}
@@ -254,8 +296,10 @@ function FaceCameraModal({ onClose, onSuccess }) {
           {/* Guide oval */}
           {(status === "ready" || status === "detecting") && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <div className="border-2 border-dashed border-white/25 rounded-full"
-                style={{ width: 190, height: 240 }} />
+              <div
+                className="border-2 border-dashed border-white/25 rounded-full"
+                style={{ width: 190, height: 240 }}
+              />
             </div>
           )}
 
@@ -263,7 +307,9 @@ function FaceCameraModal({ onClose, onSuccess }) {
           {countdown !== null && (
             <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
               <div className="w-20 h-20 rounded-full bg-black/60 border-4 border-green-400 flex items-center justify-center">
-                <span className="text-4xl font-bold text-green-400">{countdown}</span>
+                <span className="text-4xl font-bold text-green-400">
+                  {countdown}
+                </span>
               </div>
             </div>
           )}
@@ -271,9 +317,31 @@ function FaceCameraModal({ onClose, onSuccess }) {
 
         {/* Status bar */}
         <div className="flex items-center gap-2.5 px-5 py-4 border-t border-white/10">
-          {status === "loading"   && <><span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" /><p className="text-white/50 text-sm">Camera load ho raha hai...</p></>}
-          {status === "ready"     && <><span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" /><p className="text-white/50 text-sm">Apna chehra oval ke andar rakho</p></>}
-          {status === "detecting" && <><span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" /><p className="text-green-400 text-sm font-medium">Detect hua! {countdown !== null ? `${countdown} mein capture...` : ""}</p></>}
+          {status === "loading" && (
+            <>
+              <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+              <p className="text-white/50 text-sm">
+                Camera load ho raha hai...
+              </p>
+            </>
+          )}
+          {status === "ready" && (
+            <>
+              <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+              <p className="text-white/50 text-sm">
+                Apna chehra oval ke andar rakho
+              </p>
+            </>
+          )}
+          {status === "detecting" && (
+            <>
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+              <p className="text-green-400 text-sm font-medium">
+                Detect hua!{" "}
+                {countdown !== null ? `${countdown} mein capture...` : ""}
+              </p>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -283,38 +351,58 @@ function FaceCameraModal({ onClose, onSuccess }) {
 // ─── Main Login Page ─────────────────────────────────────
 export default function LoginPage() {
   const navigate = useNavigate();
-  const [form, setForm]             = useState({ email: "", password: "" });
-  const [showPass, setShowPass]     = useState(false);
-  const [loading, setLoading]       = useState(false);
+  const [form, setForm] = useState({ email: "", password: "" });
+  const [showPass, setShowPass] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const [cameraKey, setCameraKey]   = useState(0);
+  const [cameraKey, setCameraKey] = useState(0);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.email || !form.password) { toast.error("Email aur password required hain"); return; }
+    if (!form.email || !form.password) {
+      toast.error("Email aur password required hain");
+      return;
+    }
     setLoading(true);
     try {
       const res = await authAPI.login(form.email, form.password);
       if (res.data.success) applyLogin(res.data.data, form.email);
     } catch (err) {
       toast.error(err.response?.data?.message || "Invalid email or password");
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   };
 
   const applyLogin = (data, email = null) => {
-    const { access_token, refresh_token, role, user_id, full_name, profile_picture_url } = data;
+    const {
+      access_token,
+      refresh_token,
+      role,
+      user_id,
+      full_name,
+      profile_picture_url,
+    } = data;
     authStore.setAuth(access_token, refresh_token, {
-      id: user_id, role, full_name,
+      id: user_id,
+      role,
+      full_name,
       email: email || data.email,
       profile_picture_url,
     });
+    
+    window.dispatchEvent(new Event("profileUpdated"));
+
     toast.success(`Welcome, ${full_name}! 👋`);
     if (role === "admin") navigate("/admin/dashboard");
     else if (role === "teacher") navigate("/teacher/dashboard");
     else navigate("/student/dashboard");
   };
 
-  const openCamera = () => { setCameraKey(k => k + 1); setCameraOpen(true); };
+  const openCamera = () => {
+    setCameraKey((k) => k + 1);
+    setCameraOpen(true);
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-950 to-slate-900 flex items-center justify-center p-4">
@@ -329,40 +417,74 @@ export default function LoginPage() {
           <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-600 rounded-2xl mb-4 shadow-lg shadow-blue-600/30">
             <GraduationCap className="w-8 h-8 text-white" />
           </div>
-          <h1 className="font-display text-3xl font-bold text-white tracking-tight">BZU Smart LMS</h1>
-          <p className="text-white/40 text-sm mt-2">AI-Driven Learning Management System</p>
+          <h1 className="font-display text-3xl font-bold text-white tracking-tight">
+            BZU Smart LMS
+          </h1>
+          <p className="text-white/40 text-sm mt-2">
+            AI-Driven Learning Management System
+          </p>
         </div>
 
         {/* Card */}
         <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl p-8 shadow-2xl">
-          <h2 className="text-xl font-display font-bold text-white mb-6">Sign In</h2>
+          <h2 className="text-xl font-display font-bold text-white mb-6">
+            Sign In
+          </h2>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-white/60 text-sm mb-2">Email Address</label>
-              <input type="email" value={form.email}
-                onChange={e => setForm({ ...form, email: e.target.value })}
+              <label className="block text-white/60 text-sm mb-2">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
                 placeholder="your@bzu.edu.pk"
-                className="w-full bg-white/5 border border-white/10 text-white placeholder-white/20 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-all" />
+                className="w-full bg-white/5 border border-white/10 text-white placeholder-white/20 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-all"
+              />
             </div>
 
             <div>
-              <label className="block text-white/60 text-sm mb-2">Password</label>
+              <label className="block text-white/60 text-sm mb-2">
+                Password
+              </label>
               <div className="relative">
-                <input type={showPass ? "text" : "password"} value={form.password}
-                  onChange={e => setForm({ ...form, password: e.target.value })}
+                <input
+                  type={showPass ? "text" : "password"}
+                  value={form.password}
+                  onChange={(e) =>
+                    setForm({ ...form, password: e.target.value })
+                  }
                   placeholder="••••••••"
-                  className="w-full bg-white/5 border border-white/10 text-white placeholder-white/20 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-all pr-12" />
-                <button type="button" onClick={() => setShowPass(!showPass)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60">
-                  {showPass ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                  className="w-full bg-white/5 border border-white/10 text-white placeholder-white/20 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-blue-500 transition-all pr-12"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPass(!showPass)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60"
+                >
+                  {showPass ? (
+                    <EyeOff className="w-5 h-5" />
+                  ) : (
+                    <Eye className="w-5 h-5" />
+                  )}
                 </button>
               </div>
             </div>
 
-            <button type="submit" disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 mt-2">
-              {loading ? <><Loader2 className="w-5 h-5 animate-spin" /> Signing in...</> : "Sign In"}
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white font-semibold py-3 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 mt-2"
+            >
+              {loading ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" /> Signing in...
+                </>
+              ) : (
+                "Sign In"
+              )}
             </button>
 
             <div className="flex items-center gap-3">
@@ -371,8 +493,11 @@ export default function LoginPage() {
               <div className="flex-1 h-px bg-white/10" />
             </div>
 
-            <button type="button" onClick={openCamera}
-              className="w-full bg-white/5 hover:bg-green-500/10 border border-white/10 hover:border-green-500/40 text-white/70 hover:text-white font-medium py-3 rounded-xl transition-all flex items-center justify-center gap-2.5 group">
+            <button
+              type="button"
+              onClick={openCamera}
+              className="w-full bg-white/5 hover:bg-green-500/10 border border-white/10 hover:border-green-500/40 text-white/70 hover:text-white font-medium py-3 rounded-xl transition-all flex items-center justify-center gap-2.5 group"
+            >
               <Camera className="w-5 h-5 text-green-400 group-hover:scale-110 transition-transform" />
               Face se Login Karo
             </button>
@@ -380,16 +505,39 @@ export default function LoginPage() {
 
           {/* Quick Login */}
           <div className="mt-6 pt-6 border-t border-white/10">
-            <p className="text-white/30 text-xs text-center mb-3">Quick Login (Testing)</p>
+            <p className="text-white/30 text-xs text-center mb-3">
+              Quick Login (Testing)
+            </p>
             <div className="grid grid-cols-3 gap-2">
               {[
-                { label: "Admin",   email: "admin@bzu.edu.pk",              pass: "Admin@123",   color: "bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border-purple-500/20" },
-                { label: "Teacher", email: "ms.ayesha@bzu.edu.pk",          pass: "Teacher@123", color: "bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border-emerald-500/20" },
-                { label: "Student", email: "ali.hassan@student.bzu.edu.pk", pass: "Student@123", color: "bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border-blue-500/20" },
+                {
+                  label: "Admin",
+                  email: "admin@bzu.edu.pk",
+                  pass: "Admin@123",
+                  color:
+                    "bg-purple-600/20 hover:bg-purple-600/40 text-purple-300 border-purple-500/20",
+                },
+                {
+                  label: "Teacher",
+                  email: "ms.ayesha@bzu.edu.pk",
+                  pass: "Teacher@123",
+                  color:
+                    "bg-emerald-600/20 hover:bg-emerald-600/40 text-emerald-300 border-emerald-500/20",
+                },
+                {
+                  label: "Student",
+                  email: "ali.hassan@student.bzu.edu.pk",
+                  pass: "Student@123",
+                  color:
+                    "bg-blue-600/20 hover:bg-blue-600/40 text-blue-300 border-blue-500/20",
+                },
               ].map(({ label, email, pass, color }) => (
-                <button key={label} type="button"
+                <button
+                  key={label}
+                  type="button"
                   onClick={() => setForm({ email, password: pass })}
-                  className={`${color} border text-xs font-medium py-2 rounded-lg transition-all`}>
+                  className={`${color} border text-xs font-medium py-2 rounded-lg transition-all`}
+                >
                   {label}
                 </button>
               ))}
@@ -397,14 +545,19 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <p className="text-center text-white/20 text-xs mt-6">AI-Driven Smart LMS — Sarfraz RBSIT-21-13</p>
+        <p className="text-center text-white/20 text-xs mt-6">
+          AI-Driven Smart LMS — Sarfraz RBSIT-21-13
+        </p>
       </div>
 
       {cameraOpen && (
         <FaceCameraModal
           key={cameraKey}
           onClose={() => setCameraOpen(false)}
-          onSuccess={(data) => { setCameraOpen(false); applyLogin(data); }}
+          onSuccess={(data) => {
+            setCameraOpen(false);
+            applyLogin(data);
+          }}
         />
       )}
     </div>
