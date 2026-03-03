@@ -21,6 +21,7 @@ import AnnouncementsPage from "./pages/admin/AnnouncementsPage";
 import NoticesPage from "./pages/admin/NoticesPage";
 import GatesPage from "./pages/admin/GatesPage";
 import AnalyticsPage from "./pages/admin/AnalyticsPage";
+import GateAttendancePage from "./pages/admin/GateAttendancePage";
 
 // ── Phase 2: Teacher Pages ──────────────────────────
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
@@ -123,6 +124,7 @@ export default function App() {
                   <Route path="announcements" element={<AnnouncementsPage />} />
                   <Route path="notices" element={<NoticesPage />} />
                   <Route path="gates" element={<GatesPage />} />
+                  <Route path="gate-attendance" element={<GateAttendancePage />} />
                   <Route path="analytics" element={<AnalyticsPage />} />
                   <Route
                     path="*"

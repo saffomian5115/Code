@@ -105,6 +105,7 @@ export const adminAPI = {
   createGate: (data) => api.post("/gates", data),
   updateGate: (id, data) => api.put(`/gates/${id}`, data),
   addCamera: (gateId, data) => api.post(`/gates/${gateId}/cameras`, data),
+  gateAttendance: (data) => api.post("/face/gate-attendance", data),
   setGateSchedule: (gateId, data) =>
     api.post(`/gates/${gateId}/schedule`, data),
   getStudentCampusAttendance: (studentId, params = {}) => {

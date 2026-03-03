@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { adminAPI } from "../../api/admin.api";
 import { formatDateTime } from "../../utils/helpers";
 import toast from "react-hot-toast";
@@ -14,6 +15,7 @@ import {
   ChevronDown,
   ChevronRight,
   Settings,
+  ScanFace,
 } from "lucide-react";
 
 const GATE_TYPES = ["main", "department", "lab", "library", "hostel"];
@@ -523,6 +525,17 @@ function GateCard({ gate, onRefresh }) {
             <Clock size={12} /> Schedule
           </button>
           <button
+            onClick={() =>
+              navigate(
+                `/admin/gate-attendance?gate_id=${gate.id}&camera_id=${gate.cameras[0]?.id || 1}&direction=in`,
+              )
+            }
+            className="mt-3 w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
+          >
+            <ScanFace size={15} />
+            Open Kiosk
+          </button>
+          <button
             onClick={loadDetail}
             disabled={loading}
             className="p-2 hover:bg-slate-100 text-slate-400 rounded-xl transition-colors"
@@ -635,7 +648,7 @@ function GateCard({ gate, onRefresh }) {
           )}
         </div>
       )}
-      
+
       {expanded && detail && (
         <div className="px-5 pb-5 border-t border-slate-100 pt-4 space-y-4">
           <div className="grid grid-cols-2 gap-4">

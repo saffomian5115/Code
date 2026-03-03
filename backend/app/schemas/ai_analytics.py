@@ -75,3 +75,9 @@ class FaceVerifyRequest(BaseModel):
     camera_id: int
     image_base64: str
     entry_direction: Optional[str] = "in"
+
+class GateAttendanceRequest(BaseModel):
+    image_base64: str
+    gate_id: int
+    camera_id: int
+    entry_direction: str = "in"  # "in" or "out"

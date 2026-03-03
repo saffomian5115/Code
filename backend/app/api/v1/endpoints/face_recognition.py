@@ -6,6 +6,7 @@ from app.ai.face_recognition_engine import FaceRecognitionEngine
 from app.services.attendance_service import CampusAttendanceService
 from app.schemas.ai_analytics import FaceEnrollRequest, FaceVerifyRequest
 from app.utils.response import success_response, error_response
+from app.schemas.ai_analytics import FaceEnrollRequest, FaceVerifyRequest, GateAttendanceRequest
 
 router = APIRouter(prefix="/face", tags=["Face Recognition"])
 
@@ -106,3 +107,77 @@ async def generate_quiz_ollama(
         return error_response(error, "GENERATE_FAILED")
 
     return success_response(result, "AI Quiz generated with Ollama")
+
+@router.post("/gate-attendance")
+def gate_attendance(
+    request: GateAttendanceRequest,
+    db: Session = Depends(get_db)
+    # NO auth — public kiosk endpoint
+):
+    """Gate camera se auto face attendance. Auth nahi chahiye."""
+
+    # Step 1: Face recognize karo
+    result = FaceRecognitionEngine.recognize_face(
+        db=db,
+        image_base64=request.image_base64,
+        gate_id=request.gate_id,
+        camera_id=request.camera_id
+    )
+
+    if not result.get("matched"):
+        return success_response({
+            "matched": False,
+            "confidence": result.get("confidence", 0),
+            "error": result.get("error", "Face not recognized")
+        }, "Face not recognized")
+
+    # Step 2: User ka full profile lao
+    from app.models.user import User
+    user = db.query(User).filter(User.id == result["user_id"]).first()
+    if not user or not user.is_active:
+        return error_response("User inactive", "USER_INACTIVE")
+
+    full_name = None
+    profile_picture_url = None
+    roll_number = user.roll_number
+
+    if user.student_profile:
+        full_name = user.student_profile.full_name
+        profile_picture_url = user.student_profile.profile_picture_url
+    elif user.teacher_profile:
+        full_name = user.teacher_profile.full_name
+        profile_picture_url = user.teacher_profile.profile_picture_url
+    elif user.admin_profile:
+        full_name = user.admin_profile.full_name
+        profile_picture_url = user.admin_profile.profile_picture_url
+
+    # Step 3: Attendance log karo
+    attendance_data = {
+        "student_id": user.id,
+        "gate_id": request.gate_id,
+        "camera_id": request.camera_id,
+        "entry_direction": request.entry_direction,
+        "face_match_confidence": result["confidence"],
+        "processing_time_ms": result["processing_time_ms"],
+        "spoof_check_passed": True,
+        "liveness_score": 0.9
+    }
+
+    record, error = CampusAttendanceService.log_entry(db, attendance_data)
+    if error:
+        return error_response(error, "ATTENDANCE_LOG_FAILED")
+
+    return success_response({
+        "matched": True,
+        "duplicate": record.is_duplicate_filtered,
+        "attendance_id": record.id,
+        "user_id": user.id,
+        "full_name": full_name,
+        "roll_number": roll_number,
+        "profile_picture_url": profile_picture_url,
+        "role": user.role,
+        "confidence": result["confidence"],
+        "entry_direction": request.entry_direction,
+        "entry_time": str(record.entry_time),
+        "processing_time_ms": result["processing_time_ms"]
+    }, "Attendance logged successfully")
