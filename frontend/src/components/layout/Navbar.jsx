@@ -43,18 +43,8 @@ function timeAgo(dateStr) {
 
 export default function Navbar({ onToggleSidebar }) {
   const navigate = useNavigate()
-  const [user, setUser] = useState(authStore.getUser())
-  useEffect(() => {
-    const handleStorageChange = () => {
-      setUser(authStore.getUser())
-    }
-    window.addEventListener('storage', handleStorageChange)
-    window.addEventListener('profileUpdated', handleStorageChange) // custom event
-    return () => {
-      window.removeEventListener('storage', handleStorageChange)
-      window.removeEventListener('profileUpdated', handleStorageChange)
-    }
-  }, [])
+  const user = authStore.getUser()
+ 
   const role = user?.role || 'student'
 
   const [dropdownOpen, setDropdownOpen] = useState(false)

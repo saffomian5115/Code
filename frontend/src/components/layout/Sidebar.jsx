@@ -66,16 +66,7 @@ const ROLE_CONFIG = {
 const BASE_URL = "http://127.0.0.1:8000";
 
 export default function Sidebar({ isOpen }) {
-  const [user, setUser] = useState(authStore.getUser());
-  useEffect(() => {
-    const handleUpdate = () => setUser(authStore.getUser());
-    window.addEventListener("storage", handleUpdate);
-    window.addEventListener("profileUpdated", handleUpdate);
-    return () => {
-      window.removeEventListener("storage", handleUpdate);
-      window.removeEventListener("profileUpdated", handleUpdate);
-    };
-  }, []);
+  const user = authStore.getUser()
   const role = user?.role || "student";
   const menus = MENUS[role] || [];
   const rc = ROLE_CONFIG[role];
