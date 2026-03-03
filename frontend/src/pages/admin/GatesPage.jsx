@@ -446,6 +446,7 @@ function GateCard({ gate, onRefresh }) {
   const [detail, setDetail] = useState(null);
   const [loading, setLoading] = useState(false);
   const [modal, setModal] = useState(null); // 'camera' | 'schedule'
+  const navigate = useNavigate();
 
   const loadDetail = async () => {
     if (detail) {
@@ -527,7 +528,9 @@ function GateCard({ gate, onRefresh }) {
           <button
             onClick={() =>
               navigate(
-                `/admin/gate-attendance?gate_id=${gate.id}&camera_id=${gate.cameras[0]?.id || 1}&direction=in`,
+                `/admin/gate-attendance?gate_id=${gate.id}&camera_id=${
+                  gate.cameras?.[0]?.id ?? 1
+                }&direction=in`,
               )
             }
             className="mt-3 w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white text-sm font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"

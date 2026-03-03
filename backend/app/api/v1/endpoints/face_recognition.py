@@ -19,7 +19,7 @@ def enroll_face(
 ):
     result = FaceRecognitionEngine.enroll_face(
         db=db,
-        student_id=request.student_id,
+        user_id=request.student_id,
         image_base64=request.image_base64
     )
 
@@ -30,7 +30,7 @@ def enroll_face(
         )
 
     return success_response({
-        "student_id": result["student_id"],
+        "student_id": result["user_id"],
         "enrolled_at": result["enrolled_at"],
         "processing_time_ms": result["processing_time_ms"]
     }, "Face enrolled successfully")
