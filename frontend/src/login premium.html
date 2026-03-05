@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Premium Skeuomorphic Login</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at 30% 20%, #f8faff, #d9e0ec);
+    }
+
+    .tile {
+      width: 320px;
+      padding: 2.5rem 2rem;
+      border-radius: 2.5rem;
+      background: linear-gradient(145deg, #f0f4fa, #d9e1ee);
+      box-shadow:
+        18px 18px 35px rgba(163, 177, 198, 0.6),
+        -12px -12px 25px rgba(255, 255, 255, 0.9),
+        inset 0 1px 2px rgba(255,255,255,0.8);
+      border: 1px solid rgba(255,255,255,0.6);
+      text-align: center;
+      transition: transform 0.25s cubic-bezier(.4,0,.2,1);
+    }
+
+    .tile:hover {
+      transform: translateY(-6px);
+    }
+
+    h2 {
+      font-size: 1.9rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.4rem;
+      color: #1e2a3a;
+    }
+
+    .sub {
+      font-size: 0.85rem;
+      opacity: 0.75;
+      margin-bottom: 2rem;
+      letter-spacing: 0.4px;
+      color: #3c4a5d;
+    }
+
+    .avatar {
+      width: 85px;
+      height: 85px;
+      border-radius: 50%;
+      margin: 0 auto 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2.5rem;
+      background: linear-gradient(145deg, #e6edf7, #cfd8e6);
+      box-shadow:
+        10px 10px 20px rgba(163,177,198,0.6),
+        -8px -8px 16px rgba(255,255,255,0.9);
+      color: #2c3e50;
+    }
+
+    .input-field {
+      width: 100%;
+      padding: 0.95rem 1.3rem;
+      margin-bottom: 1.2rem;
+      border-radius: 3rem;
+      border: none;
+      font-size: 0.95rem;
+      color: #1e2a3a;
+      background: linear-gradient(145deg, #e2e8f3, #f7faff);
+      box-shadow:
+        inset 6px 6px 12px rgba(163,177,198,0.5),
+        inset -4px -4px 8px rgba(255,255,255,0.9);
+      transition: all 0.2s cubic-bezier(.4,0,.2,1);
+    }
+
+    .input-field::placeholder {
+      color: #6b7a90;
+      letter-spacing: 0.3px;
+    }
+
+    .input-field:focus {
+      outline: none;
+      box-shadow:
+        inset 4px 4px 10px rgba(163,177,198,0.6),
+        inset -3px -3px 6px rgba(255,255,255,0.9),
+        0 0 0 3px rgba(100, 130, 200, 0.15);
+    }
+
+    .login-btn {
+      width: 100%;
+      padding: 1rem;
+      border-radius: 3rem;
+      border: none;
+      font-size: 1.05rem;
+      font-weight: 600;
+      cursor: pointer;
+      color: #1e2a3a;
+      background: linear-gradient(145deg, #f5f9ff, #d7e1f1);
+      box-shadow:
+        8px 8px 16px rgba(163,177,198,0.6),
+        -6px -6px 14px rgba(255,255,255,0.9);
+      position: relative;
+      overflow: hidden;
+      transition: all 0.18s cubic-bezier(.4,0,.2,1);
+    }
+
+    .login-btn::after {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 50%;
+      background: linear-gradient(to bottom, rgba(255,255,255,0.5), rgba(255,255,255,0));
+      opacity: 0.4;
+      pointer-events: none;
+    }
+
+    .login-btn:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        10px 10px 20px rgba(163,177,198,0.7),
+        -8px -8px 18px rgba(255,255,255,1);
+    }
+
+    .login-btn:active {
+      transform: translateY(2px);
+      box-shadow:
+        inset 6px 6px 12px rgba(163,177,198,0.6),
+        inset -4px -4px 8px rgba(255,255,255,0.9);
+    }
+
+  </style>
+</head>
+<body>
+  <div class="tile">
+    <h2>skeuo·login</h2>
+    <div class="sub">premium physical depth</div>
+    <div class="avatar">👤</div>
+    <input class="input-field" type="text" placeholder="username" value="alex">
+    <input class="input-field" type="password" placeholder="password" value="123456">
+    <button class="login-btn">sign in</button>
+  </div>
+</body>
+</html>
