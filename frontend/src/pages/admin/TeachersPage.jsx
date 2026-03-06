@@ -1,24 +1,88 @@
+// ═══════════════════════════════════════════════════════════════
+//  TeachersPage.jsx  —  Neumorphic + Right-click Context Menu
+//  Replace: frontend/src/pages/admin/TeachersPage.jsx
+// ═══════════════════════════════════════════════════════════════
+
 import { useState, useEffect, useCallback } from 'react'
 import {
-  Plus, Search, X, Eye, Edit2, Loader2,
+  Plus, Search, Eye, Edit2, Trash2, Loader2,
+  ChevronLeft, ChevronRight, CheckCircle, Users,
   User, Mail, Phone, Hash, Briefcase,
-  CheckCircle, XCircle, ChevronLeft, ChevronRight,
-  GraduationCap, Calendar, Copy, Check
+  GraduationCap, Calendar, Copy, Check,
+  UserCheck, UserX,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminAPI } from '../../api/admin.api'
+import { useContextMenu, ContextMenu } from '../../hooks/useContextMenu'
 
-const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-50 transition-all bg-white"
-const Field = ({ label, required, children }) => (
-  <div>
-    <label className="block text-slate-500 text-xs font-medium mb-1.5">
-      {label}{required && <span className="text-red-400 ml-0.5">*</span>}
-    </label>
-    {children}
-  </div>
-)
+const BASE_URL = 'http://127.0.0.1:8000'
 
-// ── View Modal ─────────────────────────────────────
+const inputStyle = {
+  width: '100%',
+  background: 'var(--neu-surface-deep)',
+  boxShadow: 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)',
+  border: '1px solid var(--neu-border)',
+  borderRadius: '0.75rem',
+  padding: '0.6rem 0.9rem',
+  fontSize: '0.85rem',
+  color: 'var(--neu-text-primary)',
+  outline: 'none',
+}
+
+function Field({ label, children }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+      <label style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--neu-text-ghost)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+function Avatar({ name, url, size = 32 }) {
+  return url
+    ? <img src={`${BASE_URL}${url}`} alt="" style={{ width: size, height: size, borderRadius: '0.5rem', objectFit: 'cover', flexShrink: 0 }} />
+    : (
+      <div style={{
+        width: size, height: size, borderRadius: '0.5rem', flexShrink: 0,
+        background: 'rgba(155,89,182,0.15)', color: '#9b59b6',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontWeight: 800, fontSize: size * 0.38, fontFamily: 'Outfit,sans-serif',
+      }}>
+        {name?.[0]?.toUpperCase() || '?'}
+      </div>
+    )
+}
+
+function Modal({ children, wide }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0,
+      background: 'rgba(10,14,22,0.6)',
+      backdropFilter: 'blur(8px)',
+      zIndex: 50,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '1rem',
+    }}>
+      <div style={{
+        width: '100%', maxWidth: wide ? '560px' : '420px',
+        background: 'var(--neu-surface)',
+        boxShadow: '12px 12px 32px var(--neu-shadow-dark), -6px -6px 18px var(--neu-shadow-light)',
+        border: '1px solid var(--neu-border)',
+        borderRadius: '1.5rem',
+        maxHeight: '90vh',
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
+        animation: 'neu-slide-up 0.22s cubic-bezier(0.34,1.56,0.64,1) both',
+      }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// ── View Modal ────────────────────────────────────────────────
 function ViewModal({ teacherId, onClose }) {
   const [teacher, setTeacher] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -26,285 +90,278 @@ function ViewModal({ teacherId, onClose }) {
   useEffect(() => {
     adminAPI.getTeacher(teacherId)
       .then(r => setTeacher(r.data.data))
-      .catch(() => toast.error('Failed to load teacher'))
+      .catch(() => toast.error('Failed to load'))
       .finally(() => setLoading(false))
   }, [teacherId])
 
+  const rows = [
+    { icon: Mail,         label: 'Email',         value: teacher?.email },
+    { icon: Hash,         label: 'Employee ID',   value: teacher?.employee_id },
+    { icon: Phone,        label: 'Phone',         value: teacher?.phone },
+    { icon: Hash,         label: 'CNIC',          value: teacher?.cnic },
+    { icon: Briefcase,    label: 'Designation',   value: teacher?.designation },
+    { icon: GraduationCap,label: 'Qualification', value: teacher?.qualification },
+    { icon: Briefcase,    label: 'Specialization',value: teacher?.specialization },
+    { icon: Calendar,     label: 'Joining Date',  value: teacher?.joining_date },
+  ].filter(r => r.value)
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <h3 className="font-display font-bold text-lg text-slate-800">Teacher Detail</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
-            <X size={18} className="text-slate-500" />
-          </button>
+    <Modal>
+      <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        {loading
+          ? <div style={{ width: 48, height: 48, borderRadius: '0.875rem', background: 'var(--neu-surface-deep)' }} />
+          : <Avatar name={teacher?.full_name} url={teacher?.profile_picture_url} size={48} />
+        }
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>
+            {loading ? '...' : teacher?.full_name}
+          </p>
+          <p style={{ fontSize: '0.75rem', color: 'var(--neu-text-ghost)', marginTop: '1px' }}>
+            {teacher?.designation || 'Teacher'}
+          </p>
         </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center p-12">
-            <Loader2 className="animate-spin text-purple-600 w-6 h-6" />
-          </div>
-        ) : teacher ? (
-          <div className="p-6 space-y-4 overflow-y-auto">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center text-purple-700 font-bold text-xl">
-                {teacher.full_name?.[0] || '?'}
-              </div>
-              <div>
-                <p className="font-bold text-slate-800 text-lg">{teacher.full_name}</p>
-                <p className="text-slate-400 text-sm">{teacher.designation || '—'}</p>
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${teacher.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                  {teacher.is_active ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { icon: Mail,         label: 'Email',          value: teacher.email },
-                { icon: Hash,         label: 'Employee ID',    value: teacher.employee_id },
-                { icon: Phone,        label: 'Phone',          value: teacher.phone },
-                { icon: Hash,         label: 'CNIC',           value: teacher.cnic },
-                { icon: GraduationCap,label: 'Qualification',  value: teacher.qualification },
-                { icon: Briefcase,    label: 'Specialization', value: teacher.specialization },
-                { icon: Calendar,     label: 'Joining Date',   value: teacher.joining_date },
-              ].map(({ icon: Icon, label, value }) => value ? (
-                <div key={label} className="bg-slate-50 rounded-xl p-3">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Icon size={12} className="text-slate-400" />
-                    <p className="text-slate-400 text-xs">{label}</p>
-                  </div>
-                  <p className="text-slate-700 text-sm font-medium truncate">{value}</p>
-                </div>
-              ) : null)}
-            </div>
-          </div>
-        ) : (
-          <div className="p-6 text-center text-slate-400">Teacher not found</div>
-        )}
-
-        <div className="p-6 pt-0">
-          <button onClick={onClose} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium rounded-xl transition-colors">
-            Close
-          </button>
-        </div>
+        <span style={{
+          fontSize: '0.68rem', fontWeight: 700, padding: '0.2rem 0.65rem', borderRadius: '99px',
+          background: teacher?.is_active ? 'rgba(34,160,107,0.12)' : 'rgba(239,68,68,0.1)',
+          color: teacher?.is_active ? '#22a06b' : '#ef4444',
+        }}>
+          {teacher?.is_active ? 'Active' : 'Inactive'}
+        </span>
       </div>
-    </div>
+
+      <div style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: 1 }}>
+        {loading
+          ? <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Loader2 size={22} style={{ color: '#9b59b6', animation: 'spin 1s linear infinite' }} /></div>
+          : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+              {rows.map(({ icon: Icon, label, value }) => (
+                <div key={label} style={{ background: 'var(--neu-surface-deep)', borderRadius: '0.75rem', padding: '0.75rem', overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '3px' }}>
+                    <Icon size={11} style={{ color: 'var(--neu-text-ghost)', flexShrink: 0 }} />
+                    <span style={{ fontSize: '0.62rem', color: 'var(--neu-text-ghost)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</span>
+                  </div>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--neu-text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</p>
+                </div>
+              ))}
+            </div>
+          )
+        }
+      </div>
+
+      <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--neu-border)' }}>
+        <button onClick={onClose} style={{ ...inputStyle, cursor: 'pointer', textAlign: 'center', fontWeight: 600, color: 'var(--neu-text-secondary)' }}>
+          Close
+        </button>
+      </div>
+    </Modal>
   )
 }
 
-// ── Create / Edit Modal ────────────────────────────
+// ── Create / Edit Modal ───────────────────────────────────────
 function TeacherModal({ teacher, onClose, onSuccess }) {
-  const isEdit = !!teacher
+  const isEdit = !!teacher?.user_id
   const [form, setForm] = useState({
-    email: teacher?.email || '',
-    full_name: teacher?.full_name || '',
-    employee_id: teacher?.employee_id || '',
-    designation: teacher?.designation || '',
-    qualification: teacher?.qualification || '',
+    email:          teacher?.email          || '',
+    full_name:      teacher?.full_name      || '',
+    employee_id:    teacher?.employee_id    || '',
+    designation:    teacher?.designation    || '',
+    qualification:  teacher?.qualification  || '',
     specialization: teacher?.specialization || '',
-    phone: teacher?.phone || '',
-    cnic: teacher?.cnic || '',
-    joining_date: teacher?.joining_date || '',
+    phone:          teacher?.phone          || '',
+    cnic:           teacher?.cnic           || '',
+    joining_date:   teacher?.joining_date   || '',
   })
-  const [loading, setLoading] = useState(false)
+  const [loading,      setLoading]      = useState(false)
   const [tempPassword, setTempPassword] = useState(null)
-  const [copied, setCopied] = useState(false)
-
+  const [copied,       setCopied]       = useState(false)
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   const handleSubmit = async () => {
-    if (!form.full_name.trim()) { toast.error('Full name required'); return }
-    if (!isEdit && !form.email.trim()) { toast.error('Email required'); return }
-    if (!isEdit && !form.employee_id.trim()) { toast.error('Employee ID required'); return }
-
+    if (!form.full_name.trim())               { toast.error('Full name required'); return }
+    if (!isEdit && !form.email.trim())        { toast.error('Email required'); return }
+    if (!isEdit && !form.employee_id.trim())  { toast.error('Employee ID required'); return }
     setLoading(true)
     try {
       if (isEdit) {
         await adminAPI.updateTeacher(teacher.user_id, {
-          full_name: form.full_name,
-          designation: form.designation,
-          qualification: form.qualification,
-          specialization: form.specialization,
+          full_name: form.full_name, designation: form.designation,
+          qualification: form.qualification, specialization: form.specialization,
           phone: form.phone,
-          address: form.address,
         })
         toast.success('Teacher updated!')
-        onSuccess()
-        onClose()
+        onSuccess(); onClose()
       } else {
         const res = await adminAPI.createTeacher({
-          email: form.email,
-          full_name: form.full_name,
-          employee_id: form.employee_id,
-          designation: form.designation || undefined,
-          qualification: form.qualification || undefined,
-          specialization: form.specialization || undefined,
-          phone: form.phone || undefined,
-          cnic: form.cnic || undefined,
-          joining_date: form.joining_date || undefined,
+          email: form.email, full_name: form.full_name, employee_id: form.employee_id,
+          designation: form.designation || undefined, qualification: form.qualification || undefined,
+          specialization: form.specialization || undefined, phone: form.phone || undefined,
+          cnic: form.cnic || undefined, joining_date: form.joining_date || undefined,
         })
         setTempPassword(res.data.data.temp_password)
         onSuccess()
       }
     } catch (err) {
       toast.error(err.response?.data?.message || 'Operation failed')
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
-  const copyPassword = () => {
-    navigator.clipboard.writeText(tempPassword)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  // Success screen
+  // Success screen — show temp password
   if (tempPassword) {
     return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-8 text-center">
-          <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="text-emerald-600 w-8 h-8" />
+      <Modal>
+        <div style={{ padding: '2.5rem', textAlign: 'center' }}>
+          <div style={{ width: '4rem', height: '4rem', borderRadius: '1.25rem', background: 'rgba(34,160,107,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
+            <CheckCircle size={26} style={{ color: '#22a06b' }} />
           </div>
-          <h3 className="font-display font-bold text-xl text-slate-800 mb-1">Teacher Created!</h3>
-          <p className="text-slate-400 text-sm mb-6">Share these credentials with the teacher</p>
+          <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', marginBottom: '0.35rem' }}>Teacher Created!</h3>
+          <p style={{ fontSize: '0.8rem', color: 'var(--neu-text-ghost)', marginBottom: '1.5rem' }}>Share these credentials with the teacher</p>
 
-          <div className="bg-slate-50 rounded-xl p-4 text-left mb-4">
-            <p className="text-xs text-slate-400 mb-1">Temporary Password</p>
-            <div className="flex items-center justify-between gap-2">
-              <code className="font-mono font-bold text-slate-800 text-lg">{tempPassword}</code>
-              <button onClick={copyPassword} className="p-2 hover:bg-slate-200 rounded-lg transition-colors">
-                {copied ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} className="text-slate-500" />}
+          <div style={{ background: 'var(--neu-surface-deep)', borderRadius: '0.875rem', padding: '1rem', textAlign: 'left', marginBottom: '0.75rem' }}>
+            <p style={{ fontSize: '0.65rem', color: 'var(--neu-text-ghost)', marginBottom: '0.4rem', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Temporary Password</p>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem' }}>
+              <code style={{ fontFamily: 'monospace', fontWeight: 800, fontSize: '1.2rem', color: 'var(--neu-text-primary)', letterSpacing: '0.05em' }}>{tempPassword}</code>
+              <button
+                onClick={() => { navigator.clipboard.writeText(tempPassword); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
+                style={{ ...inputStyle, width: '2.2rem', height: '2.2rem', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+              >
+                {copied ? <Check size={14} style={{ color: '#22a06b' }} /> : <Copy size={14} />}
               </button>
             </div>
           </div>
 
-          <p className="text-xs text-amber-600 bg-amber-50 rounded-lg p-3 mb-6">
-            ⚠️ Ye password sirf ek bar dikhega. Copy kar lo!
+          <p style={{ fontSize: '0.72rem', color: '#f59e0b', background: 'rgba(245,158,11,0.1)', borderRadius: '0.625rem', padding: '0.6rem', marginBottom: '1.5rem' }}>
+            ⚠️ Ye password sirf ek bar dikhega — copy kar lo!
           </p>
 
-          <button onClick={onClose} className="w-full py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-xl transition-colors">
-            Done
-          </button>
+          <button onClick={onClose} style={{
+            width: '100%', padding: '0.75rem', borderRadius: '0.875rem', border: 'none',
+            background: 'linear-gradient(145deg, #9b59b6, #7d3c98)',
+            boxShadow: '0 4px 14px rgba(155,89,182,0.35)',
+            color: '#fff', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer',
+          }}>Done</button>
         </div>
-      </div>
+      </Modal>
     )
   }
 
+  const fields = [
+    { key: 'full_name',      label: 'Full Name *',     type: 'text',  editOnly: false },
+    { key: 'email',          label: 'Email *',         type: 'email', createOnly: true },
+    { key: 'employee_id',    label: 'Employee ID *',   type: 'text',  createOnly: true },
+    { key: 'designation',    label: 'Designation',     type: 'text' },
+    { key: 'phone',          label: 'Phone',           type: 'text' },
+    { key: 'qualification',  label: 'Qualification',   type: 'text' },
+    { key: 'specialization', label: 'Specialization',  type: 'text' },
+    { key: 'cnic',           label: 'CNIC',            type: 'text',  createOnly: true },
+    { key: 'joining_date',   label: 'Joining Date',    type: 'date',  createOnly: true },
+  ].filter(f => isEdit ? !f.createOnly : !f.editOnly)
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <h3 className="font-display font-bold text-lg text-slate-800">
-            {isEdit ? 'Edit Teacher' : 'Add New Teacher'}
-          </h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
-            <X size={18} className="text-slate-500" />
-          </button>
-        </div>
+    <Modal wide>
+      <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>
+          {isEdit ? 'Edit Teacher' : 'Add Teacher'}
+        </h2>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neu-text-ghost)', fontSize: '1rem' }}>✕</button>
+      </div>
 
-        <div className="p-6 overflow-y-auto space-y-4">
-          {!isEdit && (
-            <Field label="Email" required>
-              <input className={inputCls} type="email" value={form.email}
-                onChange={e => set('email', e.target.value)} placeholder="teacher@bzu.edu.pk" />
+      <div style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: 1 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+          {fields.map(({ key, label, type }) => (
+            <Field key={key} label={label}>
+              <input type={type} value={form[key]} onChange={e => set(key, e.target.value)} style={inputStyle} />
             </Field>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Full Name" required>
-              <input className={inputCls} value={form.full_name}
-                onChange={e => set('full_name', e.target.value)} placeholder="Dr. Ahmad Khan" />
-            </Field>
-
-            {!isEdit && (
-              <Field label="Employee ID" required>
-                <input className={inputCls} value={form.employee_id}
-                  onChange={e => set('employee_id', e.target.value)} placeholder="EMP-001" />
-              </Field>
-            )}
-
-            <Field label="Designation">
-              <input className={inputCls} value={form.designation}
-                onChange={e => set('designation', e.target.value)} placeholder="Assistant Professor" />
-            </Field>
-
-            <Field label="Phone">
-              <input className={inputCls} value={form.phone}
-                onChange={e => set('phone', e.target.value)} placeholder="03001234567" />
-            </Field>
-
-            <Field label="Qualification">
-              <input className={inputCls} value={form.qualification}
-                onChange={e => set('qualification', e.target.value)} placeholder="PhD Computer Science" />
-            </Field>
-
-            <Field label="Specialization">
-              <input className={inputCls} value={form.specialization}
-                onChange={e => set('specialization', e.target.value)} placeholder="AI, Machine Learning" />
-            </Field>
-
-            {!isEdit && (
-              <>
-                <Field label="Joining Date">
-                  <input className={inputCls} type="date" value={form.joining_date}
-                    onChange={e => set('joining_date', e.target.value)} />
-                </Field>
-                <Field label="CNIC">
-                  <input className={inputCls} value={form.cnic}
-                    onChange={e => set('cnic', e.target.value)} placeholder="3610212345678" />
-                </Field>
-              </>
-            )}
-          </div>
-
-          {!isEdit && (
-            <div className="bg-purple-50 rounded-xl p-3 text-xs text-purple-700">
-              💡 Default password hoga: <strong>teacher123</strong>
-            </div>
-          )}
-        </div>
-
-        <div className="p-6 pt-0 flex gap-3">
-          <button onClick={onClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium rounded-xl transition-colors">
-            Cancel
-          </button>
-          <button onClick={handleSubmit} disabled={loading}
-            className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-60">
-            {loading && <Loader2 size={15} className="animate-spin" />}
-            {isEdit ? 'Save Changes' : 'Create Teacher'}
-          </button>
+          ))}
         </div>
       </div>
-    </div>
+
+      <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--neu-border)', display: 'flex', gap: '0.6rem' }}>
+        <button onClick={onClose} style={{ ...inputStyle, cursor: 'pointer', textAlign: 'center', fontWeight: 600, color: 'var(--neu-text-secondary)', flex: 1, width: 'auto' }}>
+          Cancel
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={loading}
+          style={{
+            flex: 1, padding: '0.65rem', borderRadius: '0.75rem', border: 'none',
+            background: 'linear-gradient(145deg, #9b59b6, #7d3c98)',
+            boxShadow: '0 4px 14px rgba(155,89,182,0.3)',
+            color: '#fff', fontWeight: 700, fontSize: '0.85rem',
+            cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.75 : 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+          }}
+        >
+          {loading && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+          {isEdit ? 'Save Changes' : 'Create Teacher'}
+        </button>
+      </div>
+    </Modal>
   )
 }
 
-// ── Main Page ──────────────────────────────────────
-export default function TeachersPage() {
-  const [teachers, setTeachers] = useState([])
-  const [pagination, setPagination] = useState({ total: 0, page: 1, per_page: 20, total_pages: 1 })
-  const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
+// ── Delete Confirm ────────────────────────────────────────────
+function DeleteModal({ teacher, onClose, onConfirm, loading }) {
+  return (
+    <Modal>
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <div style={{ width: '3.5rem', height: '3.5rem', borderRadius: '1rem', background: 'rgba(239,68,68,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
+          <Trash2 size={22} style={{ color: '#ef4444' }} />
+        </div>
+        <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', marginBottom: '0.35rem' }}>Delete Teacher?</h3>
+        <p style={{ fontSize: '0.82rem', color: 'var(--neu-text-muted)', marginBottom: '0.5rem' }}>
+          <strong style={{ color: 'var(--neu-text-primary)' }}>{teacher?.full_name}</strong> ko permanently delete karna chahte hain?
+        </p>
+        <p style={{ fontSize: '0.75rem', color: 'var(--neu-danger)', marginBottom: '1.5rem' }}>Yeh action undo nahi ho sakta.</p>
+        <div style={{ display: 'flex', gap: '0.6rem' }}>
+          <button onClick={onClose} style={{ ...inputStyle, cursor: 'pointer', textAlign: 'center', fontWeight: 600, color: 'var(--neu-text-secondary)', flex: 1 }}>
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            style={{
+              flex: 1, padding: '0.65rem', borderRadius: '0.75rem', border: 'none',
+              background: 'linear-gradient(145deg, #f26b6b, #d94f4f)',
+              boxShadow: '0 4px 14px rgba(242,107,107,0.3)',
+              color: '#fff', fontWeight: 700, fontSize: '0.85rem',
+              cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.75 : 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+            }}
+          >
+            {loading && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+            Delete
+          </button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
 
-  const [viewId, setViewId] = useState(null)
-  const [editTeacher, setEditTeacher] = useState(null)
+// ═════════════════════════════════════════════════════════════
+//  MAIN PAGE
+// ═════════════════════════════════════════════════════════════
+export default function TeachersPage() {
+  const [teachers,   setTeachers]   = useState([])
+  const [pagination, setPagination] = useState({ total: 0, page: 1, per_page: 10, total_pages: 1 })
+  const [search,     setSearch]     = useState('')
+  const [loading,    setLoading]    = useState(true)
+  const [viewId,     setViewId]     = useState(null)
+  const [editTarget, setEditTarget] = useState(null)
   const [showCreate, setShowCreate] = useState(false)
+  const [delTarget,  setDelTarget]  = useState(null)
   const [togglingId, setTogglingId] = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
+
+  const { menu, open: openMenu, close: closeMenu } = useContextMenu()
 
   const fetchTeachers = useCallback(async (page = 1, q = search) => {
     setLoading(true)
     try {
-      const res = await adminAPI.getTeachers(page, 20, q)
-      setTeachers(res.data.data.teachers || [])
-      setPagination(res.data.data.pagination || { total: 0, page: 1, per_page: 20, total_pages: 1 })
-    } catch {
-      toast.error('Failed to load teachers')
-    } finally {
-      setLoading(false)
-    }
+      const res = await adminAPI.getTeachers(page, 10, q)
+      setTeachers(res.data.data.teachers)
+      setPagination(res.data.data.pagination)
+    } catch { toast.error('Failed to load teachers') }
+    finally  { setLoading(false) }
   }, [search])
 
   useEffect(() => { fetchTeachers() }, [])
@@ -319,155 +376,208 @@ export default function TeachersPage() {
       await adminAPI.toggleTeacherStatus(t.user_id)
       toast.success(`Teacher ${t.is_active ? 'deactivated' : 'activated'}`)
       fetchTeachers(pagination.page)
-    } catch {
-      toast.error('Status change failed')
-    } finally {
-      setTogglingId(null)
-    }
+    } catch { toast.error('Status change failed') }
+    finally { setTogglingId(null) }
+  }
+
+  const handleDelete = async () => {
+    setDeletingId(delTarget.user_id)
+    try {
+      await adminAPI.deleteTeacher(delTarget.user_id)
+      toast.success('Teacher deleted')
+      setDelTarget(null)
+      fetchTeachers(pagination.page)
+    } catch (err) { toast.error(err.response?.data?.message || 'Delete failed') }
+    finally { setDeletingId(null) }
+  }
+
+  const ctxItems = (row) => [
+    { label: 'View Profile',   icon: Eye,       onClick: (r) => setViewId(r.user_id) },
+    { label: 'Edit',           icon: Edit2,     onClick: (r) => setEditTarget(r) },
+    { divider: true },
+    {
+      label: row?.is_active ? 'Deactivate' : 'Activate',
+      icon:  row?.is_active ? UserX : UserCheck,
+      onClick: handleToggle,
+    },
+    { divider: true },
+    { label: 'Delete',         icon: Trash2,    onClick: (r) => setDelTarget(r), danger: true },
+  ]
+
+  const thStyle = {
+    padding: '0.75rem 1rem',
+    fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase',
+    color: 'var(--neu-text-ghost)', textAlign: 'left', whiteSpace: 'nowrap',
+    borderBottom: '1px solid var(--neu-border)',
+  }
+  const tdStyle = {
+    padding: '0.75rem 1rem', fontSize: '0.82rem',
+    color: 'var(--neu-text-secondary)',
+    borderBottom: '1px solid var(--neu-border)',
   }
 
   return (
-    <div className="space-y-6">
+    <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem', paddingBottom: '2rem' }}>
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h1 className="font-display font-bold text-2xl text-slate-800">Teachers</h1>
-          <p className="text-slate-400 text-sm mt-0.5">{pagination.total} faculty members</p>
+          <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', letterSpacing: '-0.02em' }}>
+            Teachers
+          </h1>
+          <p style={{ fontSize: '0.78rem', color: 'var(--neu-text-ghost)', marginTop: '2px' }}>
+            {pagination.total} faculty members
+          </p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-semibold rounded-xl transition-colors shadow-sm"
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.5rem',
+            padding: '0.65rem 1.2rem',
+            background: 'linear-gradient(145deg, #9b59b6, #7d3c98)',
+            boxShadow: '0 4px 14px rgba(155,89,182,0.3), 6px 6px 14px var(--neu-shadow-dark), -3px -3px 8px var(--neu-shadow-light)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: '0.875rem',
+            color: '#fff', fontWeight: 700, fontSize: '0.82rem',
+            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+          }}
         >
-          <Plus size={18} /> Add Teacher
+          <Plus size={16} /> Add Teacher
         </button>
       </div>
 
       {/* Search */}
-      <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      <div style={{ position: 'relative', maxWidth: '340px' }}>
+        <Search size={14} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--neu-text-ghost)', pointerEvents: 'none' }} />
         <input
-          type="text"
-          placeholder="Search by name, email, emp ID..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-50"
+          placeholder="Search by name, email, emp ID…"
+          style={{ ...inputStyle, paddingLeft: '2.25rem', width: '100%' }}
         />
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+      {/* Table card */}
+      <div style={{
+        background: 'var(--neu-surface)',
+        boxShadow: '6px 6px 16px var(--neu-shadow-dark), -3px -3px 10px var(--neu-shadow-light)',
+        border: '1px solid var(--neu-border)',
+        borderRadius: '1.25rem',
+        overflow: 'hidden',
+      }}>
+        <p style={{ padding: '0.6rem 1rem', fontSize: '0.68rem', color: 'var(--neu-text-ghost)', borderBottom: '1px solid var(--neu-border)', fontWeight: 600, letterSpacing: '0.04em' }}>
+          Right-click on a row to see actions
+        </p>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">#</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Teacher</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Emp ID</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Designation</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Phone</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
+              <tr>
+                {['#', 'Teacher', 'Emp ID', 'Designation', 'Phone', 'Status'].map(h => (
+                  <th key={h} style={thStyle}>{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="animate-pulse">
-                    {[...Array(7)].map((_, j) => (
-                      <td key={j} className="px-4 py-3">
-                        <div className="h-4 bg-slate-200 rounded-lg w-24" />
+            <tbody>
+              {loading
+                ? Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i}>
+                    {[1,2,3,4,5,6].map(j => (
+                      <td key={j} style={tdStyle}>
+                        <div style={{ height: 14, borderRadius: 6, background: 'var(--neu-surface-deep)', animation: 'pulse 1.5s ease-in-out infinite', maxWidth: j === 2 ? 160 : 80 }} />
                       </td>
                     ))}
                   </tr>
                 ))
-              ) : teachers.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-slate-400">
-                    <User size={32} className="mx-auto mb-2 opacity-30" />
-                    No teachers found
-                  </td>
-                </tr>
-              ) : (
-                teachers.map((t, idx) => (
-                  <tr key={t.user_id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 text-slate-400 text-xs">
-                      {(pagination.page - 1) * pagination.per_page + idx + 1}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center text-purple-700 font-bold text-sm flex-shrink-0">
-                          {t.full_name?.[0] || '?'}
+                : teachers.length === 0
+                  ? (
+                    <tr>
+                      <td colSpan={6} style={{ padding: '3rem', textAlign: 'center', color: 'var(--neu-text-ghost)', fontSize: '0.85rem' }}>
+                        <Users size={32} style={{ margin: '0 auto 0.75rem', opacity: 0.3, display: 'block' }} />
+                        No teachers found
+                      </td>
+                    </tr>
+                  )
+                  : teachers.map((t, idx) => (
+                    <tr
+                      key={t.user_id}
+                      onContextMenu={e => openMenu(e, t)}
+                      style={{ cursor: 'context-menu', transition: 'background 0.12s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--neu-surface-deep)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <td style={{ ...tdStyle, color: 'var(--neu-text-ghost)', width: '3rem' }}>
+                        {(pagination.page - 1) * pagination.per_page + idx + 1}
+                      </td>
+                      <td style={tdStyle}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                          <Avatar name={t.full_name} url={t.profile_picture_url} size={32} />
+                          <span style={{ fontWeight: 600, color: 'var(--neu-text-primary)' }}>
+                            {t.full_name || '—'}
+                          </span>
                         </div>
-                        <div>
-                          <p className="font-semibold text-slate-700">{t.full_name}</p>
-                          <p className="text-slate-400 text-xs">{t.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{t.employee_id || '—'}</td>
-                    <td className="px-4 py-3 text-slate-500 text-sm">{t.designation || '—'}</td>
-                    <td className="px-4 py-3 text-slate-500 text-xs">{t.phone || '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${t.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                        {t.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        {/* View */}
-                        <button onClick={() => setViewId(t.user_id)}
-                          className="p-1.5 rounded-lg hover:bg-purple-50 text-slate-400 hover:text-purple-600 transition-colors" title="View">
-                          <Eye size={15} />
-                        </button>
-                        {/* Edit */}
-                        <button onClick={() => setEditTeacher(t)}
-                          className="p-1.5 rounded-lg hover:bg-amber-50 text-slate-400 hover:text-amber-600 transition-colors" title="Edit">
-                          <Edit2 size={15} />
-                        </button>
-                        {/* Toggle */}
-                        <button onClick={() => handleToggle(t)} disabled={togglingId === t.user_id}
-                          className={`p-1.5 rounded-lg transition-colors ${t.is_active ? 'hover:bg-red-50 text-slate-400 hover:text-red-500' : 'hover:bg-emerald-50 text-slate-400 hover:text-emerald-600'}`}
-                          title={t.is_active ? 'Deactivate' : 'Activate'}>
-                          {togglingId === t.user_id
-                            ? <Loader2 size={15} className="animate-spin" />
-                            : t.is_active ? <XCircle size={15} /> : <CheckCircle size={15} />}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
+                      </td>
+                      <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '0.78rem' }}>
+                        {t.employee_id || '—'}
+                      </td>
+                      <td style={{ ...tdStyle, color: 'var(--neu-text-muted)' }}>
+                        {t.designation || '—'}
+                      </td>
+                      <td style={{ ...tdStyle, color: 'var(--neu-text-muted)' }}>
+                        {t.phone || '—'}
+                      </td>
+                      <td style={tdStyle}>
+                        <span style={{
+                          fontSize: '0.68rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: '99px',
+                          background: t.is_active ? 'rgba(34,160,107,0.12)' : 'rgba(239,68,68,0.1)',
+                          color: t.is_active ? '#22a06b' : '#ef4444',
+                        }}>
+                          {t.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+              }
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
         {pagination.total_pages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-            <p className="text-xs text-slate-400">
-              Showing {(pagination.page - 1) * pagination.per_page + 1}–{Math.min(pagination.page * pagination.per_page, pagination.total)} of {pagination.total}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', borderTop: '1px solid var(--neu-border)' }}>
+            <p style={{ fontSize: '0.72rem', color: 'var(--neu-text-ghost)' }}>
+              {(pagination.page - 1) * pagination.per_page + 1}–{Math.min(pagination.page * pagination.per_page, pagination.total)} of {pagination.total}
             </p>
-            <div className="flex gap-1">
-              <button onClick={() => fetchTeachers(pagination.page - 1)} disabled={pagination.page === 1}
-                className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 transition-colors">
-                <ChevronLeft size={16} className="text-slate-600" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <button
+                onClick={() => fetchTeachers(pagination.page - 1)}
+                disabled={pagination.page === 1}
+                style={{ ...inputStyle, width: '2rem', height: '2rem', padding: 0, cursor: pagination.page === 1 ? 'not-allowed' : 'pointer', opacity: pagination.page === 1 ? 0.35 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <ChevronLeft size={14} />
               </button>
-              <span className="px-3 py-1 text-sm font-medium text-slate-700">
+              <span style={{ fontSize: '0.78rem', color: 'var(--neu-text-secondary)', padding: '0 0.5rem', fontWeight: 600 }}>
                 {pagination.page} / {pagination.total_pages}
               </span>
-              <button onClick={() => fetchTeachers(pagination.page + 1)} disabled={pagination.page === pagination.total_pages}
-                className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 transition-colors">
-                <ChevronRight size={16} className="text-slate-600" />
+              <button
+                onClick={() => fetchTeachers(pagination.page + 1)}
+                disabled={pagination.page === pagination.total_pages}
+                style={{ ...inputStyle, width: '2rem', height: '2rem', padding: 0, cursor: pagination.page === pagination.total_pages ? 'not-allowed' : 'pointer', opacity: pagination.page === pagination.total_pages ? 0.35 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <ChevronRight size={14} />
               </button>
             </div>
           </div>
         )}
       </div>
 
+      {/* Context menu */}
+      <ContextMenu menu={menu} close={closeMenu} items={menu ? ctxItems(menu.row) : []} />
+
       {/* Modals */}
-      {viewId && <ViewModal teacherId={viewId} onClose={() => setViewId(null)} />}
+      {viewId     && <ViewModal teacherId={viewId} onClose={() => setViewId(null)} />}
       {showCreate && <TeacherModal onClose={() => setShowCreate(false)} onSuccess={() => fetchTeachers(1)} />}
-      {editTeacher && <TeacherModal teacher={editTeacher} onClose={() => setEditTeacher(null)} onSuccess={() => fetchTeachers(pagination.page)} />}
+      {editTarget && <TeacherModal teacher={editTarget} onClose={() => setEditTarget(null)} onSuccess={() => fetchTeachers(pagination.page)} />}
+      {delTarget  && <DeleteModal teacher={delTarget} onClose={() => setDelTarget(null)} onConfirm={handleDelete} loading={!!deletingId} />}
     </div>
   )
 }

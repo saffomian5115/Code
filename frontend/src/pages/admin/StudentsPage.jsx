@@ -1,25 +1,90 @@
+// ═══════════════════════════════════════════════════════════════
+//  StudentsPage.jsx  —  Neumorphic + Right-click Context Menu
+//  Replace: frontend/src/pages/admin/StudentsPage.jsx
+// ═══════════════════════════════════════════════════════════════
+
 import { useState, useEffect, useCallback } from 'react'
 import {
-  Plus, Search, X, Eye, Edit2, Trash2,
-  Loader2, User, Mail, Phone, MapPin, Hash,
-  CheckCircle, XCircle, ChevronLeft, ChevronRight,
-  KeyRound, Copy, Check
+  Plus, Search, Eye, Edit2, Trash2, Loader2,
+  ChevronLeft, ChevronRight, CheckCircle, XCircle,
+  User, Mail, Phone, MapPin, Hash, GraduationCap,
+  UserCheck, UserX,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminAPI } from '../../api/admin.api'
+import { useContextMenu, ContextMenu } from '../../hooks/useContextMenu'
 
-// ── Helpers ────────────────────────────────────────
-const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition-all bg-white"
-const Field = ({ label, required, children }) => (
-  <div>
-    <label className="block text-slate-500 text-xs font-medium mb-1.5">
-      {label}{required && <span className="text-red-400 ml-0.5">*</span>}
-    </label>
-    {children}
-  </div>
-)
+const BASE_URL = 'http://127.0.0.1:8000'
 
-// ── Modal — View Student ───────────────────────────
+// ── Shared input style ────────────────────────────────────────
+const inputStyle = {
+  width: '100%',
+  background: 'var(--neu-surface-deep)',
+  boxShadow: 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)',
+  border: '1px solid var(--neu-border)',
+  borderRadius: '0.75rem',
+  padding: '0.6rem 0.9rem',
+  fontSize: '0.85rem',
+  color: 'var(--neu-text-primary)',
+  outline: 'none',
+}
+
+function Field({ label, children }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+      <label style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--neu-text-ghost)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+        {label}
+      </label>
+      {children}
+    </div>
+  )
+}
+
+// ── Avatar initials ───────────────────────────────────────────
+function Avatar({ name, url, size = 32, accent = '#5b8af0' }) {
+  return url
+    ? <img src={`${BASE_URL}${url}`} alt="" style={{ width: size, height: size, borderRadius: '0.5rem', objectFit: 'cover', flexShrink: 0 }} />
+    : (
+      <div style={{
+        width: size, height: size, borderRadius: '0.5rem', flexShrink: 0,
+        background: accent + '20', color: accent,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontWeight: 800, fontSize: size * 0.38, fontFamily: 'Outfit,sans-serif',
+      }}>
+        {name?.[0]?.toUpperCase() || '?'}
+      </div>
+    )
+}
+
+// ── Neu modal shell ───────────────────────────────────────────
+function Modal({ children, wide }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0,
+      background: 'rgba(10,14,22,0.6)',
+      backdropFilter: 'blur(8px)',
+      zIndex: 50,
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '1rem',
+    }}>
+      <div style={{
+        width: '100%', maxWidth: wide ? '560px' : '420px',
+        background: 'var(--neu-surface)',
+        boxShadow: '12px 12px 32px var(--neu-shadow-dark), -6px -6px 18px var(--neu-shadow-light)',
+        border: '1px solid var(--neu-border)',
+        borderRadius: '1.5rem',
+        maxHeight: '90vh',
+        display: 'flex', flexDirection: 'column',
+        overflow: 'hidden',
+        animation: 'neu-slide-up 0.22s cubic-bezier(0.34,1.56,0.64,1) both',
+      }}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+// ── View Modal ────────────────────────────────────────────────
 function ViewModal({ studentId, onClose }) {
   const [student, setStudent] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -27,298 +92,243 @@ function ViewModal({ studentId, onClose }) {
   useEffect(() => {
     adminAPI.getStudent(studentId)
       .then(r => setStudent(r.data.data))
-      .catch(() => toast.error('Failed to load student'))
+      .catch(() => toast.error('Failed to load'))
       .finally(() => setLoading(false))
   }, [studentId])
 
+  const rows = [
+    { icon: Mail,         label: 'Email',    value: student?.email },
+    { icon: Phone,        label: 'Phone',    value: student?.profile?.phone },
+    { icon: Hash,         label: 'Roll No',  value: student?.roll_number },
+    { icon: User,         label: 'Gender',   value: student?.profile?.gender },
+    { icon: MapPin,       label: 'City',     value: student?.profile?.city },
+    { icon: User,         label: 'Father',   value: student?.profile?.father_name },
+    { icon: Phone,        label: 'Guardian', value: student?.profile?.guardian_phone },
+    { icon: MapPin,       label: 'Address',  value: student?.profile?.current_address },
+    { icon: Hash,         label: 'CNIC',     value: student?.profile?.cnic },
+  ].filter(r => r.value)
+
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <h3 className="font-display font-bold text-lg text-slate-800">Student Detail</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
-            <X size={18} className="text-slate-500" />
-          </button>
+    <Modal>
+      {/* Header */}
+      <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', gap: '1rem' }}>
+        {loading
+          ? <div style={{ width: 48, height: 48, borderRadius: '0.875rem', background: 'var(--neu-surface-deep)', animation: 'pulse 1.5s infinite' }} />
+          : <Avatar name={student?.profile?.full_name} url={student?.profile?.profile_picture_url} size={48} />
+        }
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <p style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>
+            {loading ? '...' : student?.profile?.full_name}
+          </p>
+          <p style={{ fontSize: '0.75rem', color: 'var(--neu-text-ghost)', marginTop: '1px', fontFamily: 'monospace' }}>
+            {student?.roll_number}
+          </p>
         </div>
-
-        {loading ? (
-          <div className="flex items-center justify-center p-12">
-            <Loader2 className="animate-spin text-blue-600 w-6 h-6" />
-          </div>
-        ) : student ? (
-          <div className="p-6 space-y-4 overflow-y-auto">
-            {/* Avatar */}
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-700 font-bold text-xl">
-                {student.profile?.full_name?.[0] || '?'}
-              </div>
-              <div>
-                <p className="font-bold text-slate-800 text-lg">{student.profile?.full_name}</p>
-                <p className="text-slate-400 text-sm font-mono">{student.roll_number}</p>
-                <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${student.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                  {student.is_active ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { icon: Mail,  label: 'Email',    value: student.email },
-                { icon: Phone, label: 'Phone',    value: student.profile?.phone },
-                { icon: User,  label: 'Gender',   value: student.profile?.gender },
-                { icon: MapPin,label: 'City',     value: student.profile?.city },
-                { icon: Hash,  label: 'CNIC',     value: student.profile?.cnic },
-                { icon: User,  label: 'Father',   value: student.profile?.father_name },
-                { icon: Phone, label: 'Guardian', value: student.profile?.guardian_phone },
-                { icon: MapPin,label: 'Address',  value: student.profile?.current_address },
-              ].map(({ icon: Icon, label, value }) => value ? (
-                <div key={label} className="bg-slate-50 rounded-xl p-3">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <Icon size={12} className="text-slate-400" />
-                    <p className="text-slate-400 text-xs">{label}</p>
-                  </div>
-                  <p className="text-slate-700 text-sm font-medium truncate">{value}</p>
-                </div>
-              ) : null)}
-            </div>
-          </div>
-        ) : (
-          <div className="p-6 text-center text-slate-400">Student not found</div>
-        )}
-
-        <div className="p-6 pt-0">
-          <button onClick={onClose} className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium rounded-xl transition-colors">
-            Close
-          </button>
-        </div>
+        <span style={{
+          fontSize: '0.68rem', fontWeight: 700, padding: '0.2rem 0.65rem', borderRadius: '99px',
+          background: student?.is_active ? 'rgba(34,160,107,0.12)' : 'rgba(239,68,68,0.1)',
+          color: student?.is_active ? '#22a06b' : '#ef4444',
+        }}>
+          {student?.is_active ? 'Active' : 'Inactive'}
+        </span>
       </div>
-    </div>
+
+      {/* Info grid */}
+      <div style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: 1 }}>
+        {loading
+          ? <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Loader2 size={22} style={{ color: 'var(--neu-accent)', animation: 'spin 1s linear infinite' }} /></div>
+          : (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+              {rows.map(({ icon: Icon, label, value }) => (
+                <div key={label} style={{ background: 'var(--neu-surface-deep)', borderRadius: '0.75rem', padding: '0.75rem', overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', marginBottom: '3px' }}>
+                    <Icon size={11} style={{ color: 'var(--neu-text-ghost)', flexShrink: 0 }} />
+                    <span style={{ fontSize: '0.62rem', color: 'var(--neu-text-ghost)', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>{label}</span>
+                  </div>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--neu-text-primary)', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{value}</p>
+                </div>
+              ))}
+            </div>
+          )
+        }
+      </div>
+
+      <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--neu-border)' }}>
+        <button onClick={onClose} style={{ ...inputStyle, cursor: 'pointer', textAlign: 'center', fontWeight: 600, color: 'var(--neu-text-secondary)' }}>
+          Close
+        </button>
+      </div>
+    </Modal>
   )
 }
 
-// ── Modal — Create / Edit Student ──────────────────
+// ── Create / Edit Modal ───────────────────────────────────────
 function StudentModal({ student, onClose, onSuccess }) {
-  const isEdit = !!student
+  const isEdit = !!student?.user_id
   const [form, setForm] = useState({
-    email: student?.email || '',
-    full_name: student?.full_name || '',
-    father_name: student?.father_name || '',
-    gender: student?.gender || 'male',
-    phone: student?.phone || '',
-    city: student?.city || '',
-    current_address: student?.current_address || '',
-    guardian_phone: student?.guardian_phone || '',
-    cnic: student?.cnic || '',
+    full_name: student?.full_name || student?.profile?.full_name || '',
+    email:     student?.email || '',
+    phone:     student?.profile?.phone || student?.phone || '',
+    city:      student?.profile?.city || '',
+    current_address: student?.profile?.current_address || '',
+    gender:    student?.profile?.gender || '',
+    father_name:    student?.profile?.father_name || '',
+    guardian_phone: student?.profile?.guardian_phone || '',
+    cnic:      student?.profile?.cnic || '',
+    roll_number: student?.roll_number || '',
   })
   const [loading, setLoading] = useState(false)
-  const [tempPassword, setTempPassword] = useState(null)
-  const [copied, setCopied] = useState(false)
-
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   const handleSubmit = async () => {
-    if (!form.full_name.trim()) { toast.error('Full name required'); return }
-    if (!isEdit && !form.email.trim()) { toast.error('Email required'); return }
-
+    if (!form.full_name.trim() || !form.email.trim()) {
+      toast.error('Name and email required'); return
+    }
     setLoading(true)
     try {
       if (isEdit) {
-        await adminAPI.updateStudent(student.user_id, {
-          full_name: form.full_name,
-          father_name: form.father_name,
-          gender: form.gender,
-          phone: form.phone,
-          city: form.city,
-          current_address: form.current_address,
-          guardian_phone: form.guardian_phone,
-        })
+        await adminAPI.updateStudent(student.user_id, form)
         toast.success('Student updated!')
-        onSuccess()
-        onClose()
       } else {
-        const res = await adminAPI.createStudent({
-          email: form.email,
-          full_name: form.full_name,
-          father_name: form.father_name || undefined,
-          gender: form.gender || undefined,
-          phone: form.phone || undefined,
-          city: form.city || undefined,
-          current_address: form.current_address || undefined,
-          guardian_phone: form.guardian_phone || undefined,
-          cnic: form.cnic || undefined,
-        })
-        setTempPassword(res.data.data.temp_password)
-        onSuccess()
+        await adminAPI.createStudent(form)
+        toast.success('Student created!')
       }
+      onSuccess(); onClose()
     } catch (err) {
       toast.error(err.response?.data?.message || 'Operation failed')
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
-  const copyPassword = () => {
-    navigator.clipboard.writeText(tempPassword)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  // Success screen — show temp password
-  if (tempPassword) {
-    return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-8 text-center">
-          <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="text-emerald-600 w-8 h-8" />
-          </div>
-          <h3 className="font-display font-bold text-xl text-slate-800 mb-1">Student Created!</h3>
-          <p className="text-slate-400 text-sm mb-6">Share these credentials with the student</p>
-
-          <div className="bg-slate-50 rounded-xl p-4 text-left mb-4">
-            <p className="text-xs text-slate-400 mb-1">Temporary Password</p>
-            <div className="flex items-center justify-between gap-2">
-              <code className="font-mono font-bold text-slate-800 text-lg">{tempPassword}</code>
-              <button onClick={copyPassword} className="p-2 hover:bg-slate-200 rounded-lg transition-colors">
-                {copied ? <Check size={16} className="text-emerald-600" /> : <Copy size={16} className="text-slate-500" />}
-              </button>
-            </div>
-          </div>
-
-          <p className="text-xs text-amber-600 bg-amber-50 rounded-lg p-3 mb-6">
-            ⚠️ Ye password sirf ek bar dikhega. Copy kar lo!
-          </p>
-
-          <button onClick={onClose} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-xl transition-colors">
-            Done
-          </button>
-        </div>
-      </div>
-    )
-  }
+  const fields = [
+    { key: 'full_name',      label: 'Full Name *',     type: 'text' },
+    { key: 'email',          label: 'Email *',         type: 'email', disabled: isEdit },
+    { key: 'roll_number',    label: 'Roll Number',     type: 'text' },
+    { key: 'phone',          label: 'Phone',           type: 'text' },
+    { key: 'gender',         label: 'Gender',          type: 'select', options: ['', 'Male', 'Female', 'Other'] },
+    { key: 'city',           label: 'City',            type: 'text' },
+    { key: 'father_name',    label: 'Father Name',     type: 'text' },
+    { key: 'guardian_phone', label: 'Guardian Phone',  type: 'text' },
+    { key: 'cnic',           label: 'CNIC',            type: 'text' },
+    { key: 'current_address',label: 'Address',         type: 'text' },
+  ]
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <h3 className="font-display font-bold text-lg text-slate-800">
-            {isEdit ? 'Edit Student' : 'Add New Student'}
-          </h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
-            <X size={18} className="text-slate-500" />
-          </button>
-        </div>
-
-        <div className="p-6 overflow-y-auto space-y-4">
-          {!isEdit && (
-            <Field label="Email" required>
-              <input className={inputCls} type="email" value={form.email}
-                onChange={e => set('email', e.target.value)} placeholder="student@bzu.edu.pk" />
-            </Field>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <Field label="Full Name" required>
-              <input className={inputCls} value={form.full_name}
-                onChange={e => set('full_name', e.target.value)} placeholder="Ali Hassan" />
-            </Field>
-            <Field label="Father's Name">
-              <input className={inputCls} value={form.father_name}
-                onChange={e => set('father_name', e.target.value)} placeholder="Muhammad Hassan" />
-            </Field>
-            <Field label="Gender">
-              <select className={inputCls} value={form.gender} onChange={e => set('gender', e.target.value)}>
-                <option value="male">Male</option>
-                <option value="female">Female</option>
-                <option value="other">Other</option>
-              </select>
-            </Field>
-            <Field label="Phone">
-              <input className={inputCls} value={form.phone}
-                onChange={e => set('phone', e.target.value)} placeholder="03001234567" />
-            </Field>
-            <Field label="City">
-              <input className={inputCls} value={form.city}
-                onChange={e => set('city', e.target.value)} placeholder="Multan" />
-            </Field>
-            <Field label="Guardian Phone">
-              <input className={inputCls} value={form.guardian_phone}
-                onChange={e => set('guardian_phone', e.target.value)} placeholder="03009876543" />
-            </Field>
-            {!isEdit && (
-              <Field label="CNIC">
-                <input className={inputCls} value={form.cnic}
-                  onChange={e => set('cnic', e.target.value)} placeholder="3620112345671" />
-              </Field>
-            )}
-            <Field label="Address">
-              <input className={inputCls} value={form.current_address}
-                onChange={e => set('current_address', e.target.value)} placeholder="House #, Street, City" />
-            </Field>
-          </div>
-
-          {!isEdit && (
-            <div className="bg-blue-50 rounded-xl p-3 text-xs text-blue-700">
-              💡 Roll number auto-generate hoga (BZU-2025-XXXX). Password bhi system generate karega.
-            </div>
-          )}
-        </div>
-
-        <div className="p-6 pt-0 flex gap-3">
-          <button onClick={onClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium rounded-xl transition-colors">
-            Cancel
-          </button>
-          <button onClick={handleSubmit} disabled={loading}
-            className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-60">
-            {loading && <Loader2 size={15} className="animate-spin" />}
-            {isEdit ? 'Save Changes' : 'Create Student'}
-          </button>
-        </div>
+    <Modal wide>
+      <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>
+          {isEdit ? 'Edit Student' : 'Add Student'}
+        </h2>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neu-text-ghost)', padding: '0.25rem' }}>✕</button>
       </div>
-    </div>
+
+      <div style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: 1 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+          {fields.map(({ key, label, type, disabled, options }) => (
+            <Field key={key} label={label}>
+              {type === 'select'
+                ? (
+                  <select value={form[key]} onChange={e => set(key, e.target.value)} style={inputStyle}>
+                    {options.map(o => <option key={o} value={o}>{o || '— Select —'}</option>)}
+                  </select>
+                ) : (
+                  <input
+                    type={type}
+                    value={form[key]}
+                    onChange={e => set(key, e.target.value)}
+                    disabled={disabled}
+                    style={{ ...inputStyle, opacity: disabled ? 0.5 : 1 }}
+                  />
+                )
+              }
+            </Field>
+          ))}
+        </div>
+
+        {!isEdit && (
+          <p style={{ marginTop: '0.85rem', fontSize: '0.72rem', color: 'var(--neu-text-ghost)', background: 'var(--neu-surface-deep)', borderRadius: '0.625rem', padding: '0.6rem 0.85rem' }}>
+            Password will be auto-generated and sent to the provided email.
+          </p>
+        )}
+      </div>
+
+      <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--neu-border)', display: 'flex', gap: '0.6rem' }}>
+        <button onClick={onClose} style={{ ...inputStyle, cursor: 'pointer', textAlign: 'center', fontWeight: 600, color: 'var(--neu-text-secondary)', width: 'auto', flex: 1 }}>
+          Cancel
+        </button>
+        <button
+          onClick={handleSubmit}
+          disabled={loading}
+          style={{
+            flex: 1, padding: '0.65rem', borderRadius: '0.75rem', border: 'none',
+            background: 'linear-gradient(145deg, #5b8af0, #3a6bd4)',
+            boxShadow: '0 4px 14px rgba(91,138,240,0.35)',
+            color: '#fff', fontWeight: 700, fontSize: '0.85rem',
+            cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.75 : 1,
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+          }}
+        >
+          {loading && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+          {isEdit ? 'Save Changes' : 'Create Student'}
+        </button>
+      </div>
+    </Modal>
   )
 }
 
-// ── Confirm Delete Modal ───────────────────────────
+// ── Delete Confirm ────────────────────────────────────────────
 function DeleteModal({ student, onClose, onConfirm, loading }) {
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-6 text-center">
-        <div className="w-14 h-14 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-          <Trash2 className="text-red-600 w-6 h-6" />
+    <Modal>
+      <div style={{ padding: '2rem', textAlign: 'center' }}>
+        <div style={{ width: '3.5rem', height: '3.5rem', borderRadius: '1rem', background: 'rgba(239,68,68,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 1rem' }}>
+          <Trash2 size={22} style={{ color: '#ef4444' }} />
         </div>
-        <h3 className="font-display font-bold text-lg text-slate-800 mb-1">Delete Student?</h3>
-        <p className="text-slate-400 text-sm mb-2">
-          <span className="font-semibold text-slate-600">{student?.full_name}</span> ko permanently delete karna chahte hain?
+        <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', marginBottom: '0.35rem' }}>Delete Student?</h3>
+        <p style={{ fontSize: '0.82rem', color: 'var(--neu-text-muted)', marginBottom: '0.5rem' }}>
+          <strong style={{ color: 'var(--neu-text-primary)' }}>{student?.full_name}</strong> ko permanently delete karna chahte hain?
         </p>
-        <p className="text-xs text-red-500 mb-6">Yeh action undo nahi ho sakta.</p>
-        <div className="flex gap-3">
-          <button onClick={onClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium rounded-xl transition-colors">
+        <p style={{ fontSize: '0.75rem', color: 'var(--neu-danger)', marginBottom: '1.5rem' }}>Yeh action undo nahi ho sakta.</p>
+        <div style={{ display: 'flex', gap: '0.6rem' }}>
+          <button onClick={onClose} style={{ ...inputStyle, cursor: 'pointer', textAlign: 'center', fontWeight: 600, color: 'var(--neu-text-secondary)', flex: 1 }}>
             Cancel
           </button>
-          <button onClick={onConfirm} disabled={loading}
-            className="flex-1 py-2.5 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 disabled:opacity-60">
-            {loading && <Loader2 size={14} className="animate-spin" />}
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            style={{
+              flex: 1, padding: '0.65rem', borderRadius: '0.75rem', border: 'none',
+              background: 'linear-gradient(145deg, #f26b6b, #d94f4f)',
+              boxShadow: '0 4px 14px rgba(242,107,107,0.3)',
+              color: '#fff', fontWeight: 700, fontSize: '0.85rem',
+              cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.75 : 1,
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.4rem',
+            }}
+          >
+            {loading && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
             Delete
           </button>
         </div>
       </div>
-    </div>
+    </Modal>
   )
 }
 
-// ── Main Students Page ─────────────────────────────
+// ═════════════════════════════════════════════════════════════
+//  MAIN PAGE
+// ═════════════════════════════════════════════════════════════
 export default function StudentsPage() {
-  const [students, setStudents] = useState([])
+  const [students,   setStudents]   = useState([])
   const [pagination, setPagination] = useState({ total: 0, page: 1, per_page: 10, total_pages: 1 })
-  const [search, setSearch] = useState('')
-  const [loading, setLoading] = useState(true)
-
-  const [viewId, setViewId] = useState(null)
-  const [editStudent, setEditStudent] = useState(null)
+  const [search,     setSearch]     = useState('')
+  const [loading,    setLoading]    = useState(true)
+  const [viewId,     setViewId]     = useState(null)
+  const [editTarget, setEditTarget] = useState(null)
   const [showCreate, setShowCreate] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState(null)
+  const [delTarget,  setDelTarget]  = useState(null)
   const [togglingId, setTogglingId] = useState(null)
   const [deletingId, setDeletingId] = useState(null)
+
+  const { menu, open: openMenu, close: closeMenu } = useContextMenu()
 
   const fetchStudents = useCallback(async (page = 1, q = search) => {
     setLoading(true)
@@ -326,203 +336,229 @@ export default function StudentsPage() {
       const res = await adminAPI.getStudents(page, 10, q)
       setStudents(res.data.data.students)
       setPagination(res.data.data.pagination)
-    } catch {
-      toast.error('Failed to load students')
-    } finally {
-      setLoading(false)
-    }
+    } catch { toast.error('Failed to load students') }
+    finally  { setLoading(false) }
   }, [search])
 
   useEffect(() => { fetchStudents() }, [])
-
   useEffect(() => {
     const t = setTimeout(() => fetchStudents(1, search), 400)
     return () => clearTimeout(t)
   }, [search])
 
-  const handleToggle = async (student) => {
-    setTogglingId(student.user_id)
+  const handleToggle = async (s) => {
+    setTogglingId(s.user_id)
     try {
-      await adminAPI.toggleStudentStatus(student.user_id)
-      toast.success(`Student ${student.is_active ? 'deactivated' : 'activated'}`)
+      await adminAPI.toggleStudentStatus(s.user_id)
+      toast.success(`Student ${s.is_active ? 'deactivated' : 'activated'}`)
       fetchStudents(pagination.page)
-    } catch {
-      toast.error('Status change failed')
-    } finally {
-      setTogglingId(null)
-    }
+    } catch { toast.error('Status change failed') }
+    finally { setTogglingId(null) }
   }
 
   const handleDelete = async () => {
-    setDeletingId(deleteTarget.user_id)
+    setDeletingId(delTarget.user_id)
     try {
-      await adminAPI.deleteStudent(deleteTarget.user_id)
+      await adminAPI.deleteStudent(delTarget.user_id)
       toast.success('Student deleted')
-      setDeleteTarget(null)
+      setDelTarget(null)
       fetchStudents(pagination.page)
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Delete failed')
-    } finally {
-      setDeletingId(null)
-    }
+    } catch (err) { toast.error(err.response?.data?.message || 'Delete failed') }
+    finally { setDeletingId(null) }
+  }
+
+  // Context menu items
+  const ctxItems = (row) => [
+    { label: 'View Profile',   icon: Eye,       onClick: (r) => setViewId(r.user_id) },
+    { label: 'Edit',           icon: Edit2,     onClick: (r) => setEditTarget(r) },
+    { divider: true },
+    {
+      label: row?.is_active ? 'Deactivate' : 'Activate',
+      icon:  row?.is_active ? UserX : UserCheck,
+      onClick: handleToggle,
+    },
+    { divider: true },
+    { label: 'Delete',         icon: Trash2,    onClick: (r) => setDelTarget(r), danger: true },
+  ]
+
+  const thStyle = {
+    padding: '0.75rem 1rem',
+    fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase',
+    color: 'var(--neu-text-ghost)',
+    textAlign: 'left', whiteSpace: 'nowrap',
+    borderBottom: '1px solid var(--neu-border)',
+  }
+  const tdStyle = {
+    padding: '0.75rem 1rem',
+    fontSize: '0.82rem',
+    color: 'var(--neu-text-secondary)',
+    borderBottom: '1px solid var(--neu-border)',
   }
 
   return (
-    <div className="space-y-6">
+    <div style={{ maxWidth: '1100px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem', paddingBottom: '2rem' }}>
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h1 className="font-display font-bold text-2xl text-slate-800">Students</h1>
-          <p className="text-slate-400 text-sm mt-0.5">{pagination.total} total students</p>
+          <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', letterSpacing: '-0.02em' }}>
+            Students
+          </h1>
+          <p style={{ fontSize: '0.78rem', color: 'var(--neu-text-ghost)', marginTop: '2px' }}>
+            {pagination.total} registered students
+          </p>
         </div>
         <button
           onClick={() => setShowCreate(true)}
-          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-xl transition-colors shadow-sm"
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.5rem',
+            padding: '0.65rem 1.2rem',
+            background: 'linear-gradient(145deg, #5b8af0, #3a6bd4)',
+            boxShadow: '0 4px 14px rgba(91,138,240,0.3), 6px 6px 14px var(--neu-shadow-dark), -3px -3px 8px var(--neu-shadow-light)',
+            border: '1px solid rgba(255,255,255,0.15)',
+            borderRadius: '0.875rem',
+            color: '#fff', fontWeight: 700, fontSize: '0.82rem',
+            cursor: 'pointer',
+            fontFamily: "'DM Sans', sans-serif",
+          }}
         >
-          <Plus size={18} /> Add Student
+          <Plus size={16} /> Add Student
         </button>
       </div>
 
       {/* Search */}
-      <div className="relative max-w-sm">
-        <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+      <div style={{ position: 'relative', maxWidth: '340px' }}>
+        <Search size={14} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--neu-text-ghost)', pointerEvents: 'none' }} />
         <input
-          type="text"
-          placeholder="Search by name, email, roll no..."
           value={search}
           onChange={e => setSearch(e.target.value)}
-          className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-sm text-slate-700 placeholder-slate-400 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50"
+          placeholder="Search by name, email, roll no…"
+          style={{ ...inputStyle, paddingLeft: '2.25rem', width: '100%' }}
         />
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+      {/* Table card */}
+      <div style={{
+        background: 'var(--neu-surface)',
+        boxShadow: '6px 6px 16px var(--neu-shadow-dark), -3px -3px 10px var(--neu-shadow-light)',
+        border: '1px solid var(--neu-border)',
+        borderRadius: '1.25rem',
+        overflow: 'hidden',
+      }}>
+        <p style={{ padding: '0.6rem 1rem', fontSize: '0.68rem', color: 'var(--neu-text-ghost)', borderBottom: '1px solid var(--neu-border)', fontWeight: 600, letterSpacing: '0.04em' }}>
+          Right-click on a row to see actions
+        </p>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr className="bg-slate-50 border-b border-slate-200">
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">#</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Student</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Roll No</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Contact</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Status</th>
-                <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 uppercase tracking-wide">Actions</th>
+              <tr>
+                {['#', 'Student', 'Roll No', 'Email', 'Status'].map(h => (
+                  <th key={h} style={thStyle}>{h}</th>
+                ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i} className="animate-pulse">
-                    {[...Array(6)].map((_, j) => (
-                      <td key={j} className="px-4 py-3">
-                        <div className="h-4 bg-slate-200 rounded-lg w-24" />
+            <tbody>
+              {loading
+                ? Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i}>
+                    {[1,2,3,4,5].map(j => (
+                      <td key={j} style={tdStyle}>
+                        <div style={{ height: 14, borderRadius: 6, background: 'var(--neu-surface-deep)', animation: 'pulse 1.5s ease-in-out infinite', maxWidth: j === 2 ? 160 : 80 }} />
                       </td>
                     ))}
                   </tr>
                 ))
-              ) : students.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-slate-400">
-                    <User size={32} className="mx-auto mb-2 opacity-30" />
-                    No students found
-                  </td>
-                </tr>
-              ) : (
-                students.map((s, idx) => (
-                  <tr key={s.user_id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 text-slate-400 text-xs">
-                      {(pagination.page - 1) * pagination.per_page + idx + 1}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-700 font-bold text-sm flex-shrink-0">
-                          {s.full_name?.[0] || '?'}
+                : students.length === 0
+                  ? (
+                    <tr>
+                      <td colSpan={5} style={{ padding: '3rem', textAlign: 'center', color: 'var(--neu-text-ghost)', fontSize: '0.85rem' }}>
+                        <GraduationCap size={32} style={{ margin: '0 auto 0.75rem', opacity: 0.3 }} />
+                        No students found
+                      </td>
+                    </tr>
+                  )
+                  : students.map((s, idx) => (
+                    <tr
+                      key={s.user_id}
+                      onContextMenu={e => openMenu(e, s)}
+                      style={{ cursor: 'context-menu', transition: 'background 0.12s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--neu-surface-deep)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <td style={{ ...tdStyle, color: 'var(--neu-text-ghost)', width: '3rem' }}>
+                        {(pagination.page - 1) * pagination.per_page + idx + 1}
+                      </td>
+                      <td style={tdStyle}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                          <Avatar name={s.full_name || s.profile?.full_name} url={s.profile?.profile_picture_url} size={32} />
+                          <span style={{ fontWeight: 600, color: 'var(--neu-text-primary)' }}>
+                            {s.full_name || s.profile?.full_name || '—'}
+                          </span>
                         </div>
-                        <div>
-                          <p className="font-semibold text-slate-700">{s.full_name}</p>
-                          <p className="text-slate-400 text-xs">{s.email}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-500">{s.roll_number || '—'}</td>
-                    <td className="px-4 py-3 text-slate-500 text-xs">{s.phone || '—'}</td>
-                    <td className="px-4 py-3">
-                      <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${s.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                        {s.is_active ? 'Active' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        {/* View */}
-                        <button onClick={() => setViewId(s.user_id)}
-                          className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-400 hover:text-blue-600 transition-colors" title="View">
-                          <Eye size={15} />
-                        </button>
-                        {/* Edit */}
-                        <button onClick={() => setEditStudent(s)}
-                          className="p-1.5 rounded-lg hover:bg-amber-50 text-slate-400 hover:text-amber-600 transition-colors" title="Edit">
-                          <Edit2 size={15} />
-                        </button>
-                        {/* Toggle Status */}
-                        <button onClick={() => handleToggle(s)} disabled={togglingId === s.user_id}
-                          className={`p-1.5 rounded-lg transition-colors ${s.is_active ? 'hover:bg-red-50 text-slate-400 hover:text-red-500' : 'hover:bg-emerald-50 text-slate-400 hover:text-emerald-600'}`}
-                          title={s.is_active ? 'Deactivate' : 'Activate'}>
-                          {togglingId === s.user_id
-                            ? <Loader2 size={15} className="animate-spin" />
-                            : s.is_active ? <XCircle size={15} /> : <CheckCircle size={15} />}
-                        </button>
-                        {/* Delete */}
-                        
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
+                      </td>
+                      <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '0.78rem' }}>
+                        {s.roll_number || '—'}
+                      </td>
+                      <td style={{ ...tdStyle, color: 'var(--neu-text-muted)' }}>
+                        {s.email || '—'}
+                      </td>
+                      <td style={tdStyle}>
+                        <span style={{
+                          fontSize: '0.68rem', fontWeight: 700, padding: '0.2rem 0.6rem', borderRadius: '99px',
+                          background: s.is_active ? 'rgba(34,160,107,0.12)' : 'rgba(239,68,68,0.1)',
+                          color: s.is_active ? '#22a06b' : '#ef4444',
+                        }}>
+                          {s.is_active ? 'Active' : 'Inactive'}
+                        </span>
+                      </td>
+                    </tr>
+                  ))
+              }
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
         {pagination.total_pages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100">
-            <p className="text-xs text-slate-400">
-              Showing {(pagination.page - 1) * pagination.per_page + 1}–{Math.min(pagination.page * pagination.per_page, pagination.total)} of {pagination.total}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.75rem 1rem', borderTop: '1px solid var(--neu-border)' }}>
+            <p style={{ fontSize: '0.72rem', color: 'var(--neu-text-ghost)' }}>
+              {(pagination.page - 1) * pagination.per_page + 1}–{Math.min(pagination.page * pagination.per_page, pagination.total)} of {pagination.total}
             </p>
-            <div className="flex gap-1">
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
               <button
                 onClick={() => fetchStudents(pagination.page - 1)}
                 disabled={pagination.page === 1}
-                className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                style={{ ...inputStyle, width: '2rem', height: '2rem', padding: 0, cursor: pagination.page === 1 ? 'not-allowed' : 'pointer', opacity: pagination.page === 1 ? 0.35 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
-                <ChevronLeft size={16} className="text-slate-600" />
+                <ChevronLeft size={14} />
               </button>
-              <span className="px-3 py-1 text-sm font-medium text-slate-700">
+              <span style={{ fontSize: '0.78rem', color: 'var(--neu-text-secondary)', padding: '0 0.5rem', fontWeight: 600 }}>
                 {pagination.page} / {pagination.total_pages}
               </span>
               <button
                 onClick={() => fetchStudents(pagination.page + 1)}
                 disabled={pagination.page === pagination.total_pages}
-                className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                style={{ ...inputStyle, width: '2rem', height: '2rem', padding: 0, cursor: pagination.page === pagination.total_pages ? 'not-allowed' : 'pointer', opacity: pagination.page === pagination.total_pages ? 0.35 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
               >
-                <ChevronRight size={16} className="text-slate-600" />
+                <ChevronRight size={14} />
               </button>
             </div>
           </div>
         )}
       </div>
 
+      {/* Context menu */}
+      <ContextMenu
+        menu={menu}
+        close={closeMenu}
+        items={menu ? ctxItems(menu.row) : []}
+      />
+
       {/* Modals */}
-      {viewId && <ViewModal studentId={viewId} onClose={() => setViewId(null)} />}
-      {showCreate && <StudentModal onClose={() => setShowCreate(false)} onSuccess={() => fetchStudents(1)} />}
-      {editStudent && <StudentModal student={editStudent} onClose={() => setEditStudent(null)} onSuccess={() => fetchStudents(pagination.page)} />}
-      {deleteTarget && (
-        <DeleteModal
-          student={deleteTarget}
-          onClose={() => setDeleteTarget(null)}
-          onConfirm={handleDelete}
-          loading={!!deletingId}
-        />
-      )}
+      {viewId      && <ViewModal studentId={viewId} onClose={() => setViewId(null)} />}
+      {showCreate  && <StudentModal onClose={() => setShowCreate(false)} onSuccess={() => fetchStudents(1)} />}
+      {editTarget  && <StudentModal student={editTarget} onClose={() => setEditTarget(null)} onSuccess={() => fetchStudents(pagination.page)} />}
+      {delTarget   && <DeleteModal student={delTarget} onClose={() => setDelTarget(null)} onConfirm={handleDelete} loading={!!deletingId} />}
     </div>
   )
 }
