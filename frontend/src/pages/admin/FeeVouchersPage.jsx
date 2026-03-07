@@ -1,634 +1,576 @@
-import { useState, useEffect, useCallback } from "react";
-import { adminAPI } from "../../api/admin.api";
-import { formatDate, formatCurrency } from "../../utils/helpers";
-import toast from "react-hot-toast";
+// ═══════════════════════════════════════════════════════════════
+//  FeeVouchersPage.jsx  —  frontend/src/pages/admin/FeeVouchersPage.jsx
+// ═══════════════════════════════════════════════════════════════
+import { useState, useEffect, useCallback } from 'react'
 import {
-  CreditCard,
-  Search,
-  Loader2,
-  X,
-  Plus,
-  DollarSign,
-  ChevronLeft,
-  ChevronRight,
-  AlertTriangle,
-  CheckCircle2,
-  Clock,
-} from "lucide-react";
+  CreditCard, Search, Loader2, X, Plus, DollarSign,
+  ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2,
+  Clock, Eye,
+} from 'lucide-react'
+import toast from 'react-hot-toast'
+import { adminAPI } from '../../api/admin.api'
+import { formatDate, formatCurrency } from '../../utils/helpers'
+import { useContextMenu, ContextMenu } from '../../hooks/useContextMenu'
 
-const STATUS_CONFIG = {
-  paid: {
-    cls: "bg-emerald-100 text-emerald-700",
-    icon: CheckCircle2,
-    iconCls: "text-emerald-500",
-  },
-  unpaid: {
-    cls: "bg-red-100 text-red-700",
-    icon: Clock,
-    iconCls: "text-red-400",
-  },
-  partial: {
-    cls: "bg-orange-100 text-orange-700",
-    icon: Clock,
-    iconCls: "text-orange-400",
-  },
-  overdue: {
-    cls: "bg-red-100 text-red-800",
-    icon: AlertTriangle,
-    iconCls: "text-red-500",
-  },
-};
+/* ─── CSS ─────────────────────────────────────────── */
+const CSS = `
+  .vchr-row {
+    display: grid;
+    grid-template-columns: 130px 2fr 90px 70px 100px 90px 110px 80px;
+    align-items: center;
+    gap: .5rem;
+    padding: .7rem 1rem;
+    border-radius: .85rem;
+    border: 1px solid transparent;
+    transition: background .14s ease, border-color .14s ease, transform .18s ease;
+    position: relative;
+    cursor: default;
+  }
+  .vchr-row:hover {
+    background: var(--neu-surface-deep);
+    border-color: var(--neu-border);
+    transform: translateX(3px);
+  }
+  .vchr-row .rc-hint {
+    position: absolute; right: 10px; bottom: 5px;
+    font-size: .58rem; color: var(--neu-text-ghost);
+    opacity: 0; transition: opacity .2s; pointer-events: none; font-family: monospace;
+  }
+  .vchr-row:hover .rc-hint { opacity: .35; }
+  .vchr-row.st-paid     { border-left: 3px solid #22a06b !important; }
+  .vchr-row.st-unpaid   { border-left: 3px solid #ef4444 !important; }
+  .vchr-row.st-overdue  { border-left: 3px solid #f97316 !important; }
+  .vchr-row.st-partial  { border-left: 3px solid #5b8af0 !important; }
 
-// ── Pay Voucher Modal ──────────────────────────────
-function PayModal({ voucher, onClose, onSuccess }) {
-  const [form, setForm] = useState({
-    amount_paid: voucher.total_due - (voucher.total_paid || 0),
-    payment_method: "bank_transfer",
-    reference_number: "",
-    bank_name: "",
-    receipt_number: "",
-    payment_date: new Date().toISOString().split("T")[0],
-  });
-  const [loading, setLoading] = useState(false);
-  const set = (k, v) => setForm((p) => ({ ...p, [k]: v }));
+  .stat-pill {
+    padding: .35rem 1rem;
+    border-radius: .65rem;
+    font-size: .78rem; font-weight: 700; cursor: pointer;
+    border: 1.5px solid var(--neu-border);
+    background: var(--neu-surface-deep);
+    font-family: 'DM Sans', sans-serif;
+    box-shadow: 4px 4px 10px var(--neu-shadow-dark), -2px -2px 6px var(--neu-shadow-light);
+    transition: all .16s ease;
+    color: var(--neu-text-muted);
+    display: flex; align-items: center; gap: .4rem;
+  }
+  .stat-pill.act-all     { background:#5b8af0; color:#fff; border-color:#5b8af0; box-shadow:0 3px 12px rgba(91,138,240,.35); }
+  .stat-pill.act-paid    { background:#22a06b; color:#fff; border-color:#22a06b; box-shadow:0 3px 12px rgba(34,160,107,.35); }
+  .stat-pill.act-unpaid  { background:#ef4444; color:#fff; border-color:#ef4444; box-shadow:0 3px 12px rgba(239,68,68,.35); }
+  .stat-pill.act-overdue { background:#f97316; color:#fff; border-color:#f97316; box-shadow:0 3px 12px rgba(249,115,22,.35); }
+  .stat-pill.act-partial { background:#5b8af0; color:#fff; border-color:#5b8af0; box-shadow:0 3px 12px rgba(91,138,240,.35); }
 
-  const handleSubmit = async () => {
-    if (!form.amount_paid || !form.reference_number) {
-      toast.error("Amount and reference number required");
-      return;
-    }
-    setLoading(true);
-    try {
-      await adminAPI.payVoucher(voucher.id, form);
-      toast.success("Payment recorded successfully!");
-      onSuccess();
-      onClose();
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Payment failed");
-    } finally {
-      setLoading(false);
-    }
-  };
+  .pg-btn {
+    width: 30px; height: 30px; border-radius: .55rem;
+    border: 1.5px solid var(--neu-border);
+    background: var(--neu-surface-deep);
+    font-size: .75rem; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Sans', sans-serif; color: var(--neu-text-muted);
+    box-shadow: 3px 3px 7px var(--neu-shadow-dark), -1px -1px 4px var(--neu-shadow-light);
+    transition: all .14s;
+  }
+  .pg-btn.active { background: #5b8af0; border-color: #5b8af0; color: #fff; box-shadow: 0 2px 8px rgba(91,138,240,.35); }
+  .pg-btn:disabled { opacity: .35; cursor: not-allowed; }
+  .pg-btn:not(:disabled):not(.active):hover { color: var(--neu-text-primary); }
+`
 
-  const inputCls =
-    "w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:border-blue-400 transition-all";
+/* ─── Shared ─────────────────────────────────────── */
+const iS = {
+  background: 'var(--neu-surface-deep)',
+  boxShadow: 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)',
+  border: '1px solid var(--neu-border)', borderRadius: '.75rem',
+  padding: '.6rem .9rem', fontSize: '.85rem', color: 'var(--neu-text-primary)',
+  outline: 'none', fontFamily: "'DM Sans',sans-serif", width: '100%',
+}
+const F = ({ label, children }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '.3rem' }}>
+    <label style={{ fontSize: '.68rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{label}</label>
+    {children}
+  </div>
+)
 
-  return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <div>
-            <h3 className="font-display font-bold text-lg text-slate-800">
-              Record Payment
-            </h3>
-            <p className="text-slate-400 text-sm">{voucher.voucher_number}</p>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-slate-100 rounded-xl"
-          >
-            <X size={18} className="text-slate-500" />
-          </button>
-        </div>
-
-        {/* Amount Summary */}
-        <div className="mx-6 mt-4 p-4 bg-blue-50 rounded-xl border border-blue-100">
-          <div className="flex justify-between text-sm mb-1">
-            <span className="text-slate-500">Total Due</span>
-            <span className="font-semibold text-slate-700">
-              {formatCurrency(voucher.total_due)}
-            </span>
-          </div>
-          {voucher.total_paid > 0 && (
-            <div className="flex justify-between text-sm mb-1">
-              <span className="text-slate-500">Already Paid</span>
-              <span className="font-semibold text-emerald-600">
-                {formatCurrency(voucher.total_paid)}
-              </span>
-            </div>
-          )}
-          <div className="flex justify-between text-sm font-bold border-t border-blue-200 pt-2 mt-2">
-            <span className="text-blue-700">Remaining</span>
-            <span className="text-blue-700">
-              {formatCurrency(voucher.total_due - (voucher.total_paid || 0))}
-            </span>
-          </div>
-        </div>
-
-        <div className="p-6 space-y-4">
-          <div>
-            <label className="block text-xs text-slate-500 font-medium mb-1.5">
-              Amount Paying *
-            </label>
-            <input
-              className={inputCls}
-              type="number"
-              value={form.amount_paid}
-              onChange={(e) => set("amount_paid", parseFloat(e.target.value))}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-500 font-medium mb-1.5">
-                Payment Method
-              </label>
-              <select
-                className={inputCls}
-                value={form.payment_method}
-                onChange={(e) => set("payment_method", e.target.value)}
-              >
-                <option value="bank_transfer">Bank Transfer</option>
-                <option value="cash">Cash</option>
-                <option value="online">Online</option>
-                <option value="cheque">Cheque</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 font-medium mb-1.5">
-                Bank Name
-              </label>
-              <input
-                className={inputCls}
-                value={form.bank_name}
-                onChange={(e) => set("bank_name", e.target.value)}
-                placeholder="HBL"
-              />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs text-slate-500 font-medium mb-1.5">
-                Reference No. *
-              </label>
-              <input
-                className={inputCls}
-                value={form.reference_number}
-                onChange={(e) => set("reference_number", e.target.value)}
-                placeholder="TXN-2025-001"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 font-medium mb-1.5">
-                Receipt No.
-              </label>
-              <input
-                className={inputCls}
-                value={form.receipt_number}
-                onChange={(e) => set("receipt_number", e.target.value)}
-                placeholder="RCP-2025-001"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 font-medium mb-1.5">
-              Payment Date
-            </label>
-            <input
-              className={inputCls}
-              type="date"
-              value={form.payment_date}
-              onChange={(e) => set("payment_date", e.target.value)}
-            />
-          </div>
-        </div>
-        <div className="px-6 pb-6 flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium rounded-xl transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={loading}
-            className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <>
-                <Loader2 size={16} className="animate-spin" /> Recording...
-              </>
-            ) : (
-              "Record Payment"
-            )}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+const STATUS_CFG = {
+  paid:    { c: '#22a06b', bg: 'rgba(34,160,107,.1)',  Icon: CheckCircle2, label: 'Paid'    },
+  unpaid:  { c: '#ef4444', bg: 'rgba(239,68,68,.1)',   Icon: Clock,        label: 'Unpaid'  },
+  overdue: { c: '#f97316', bg: 'rgba(249,115,22,.1)',  Icon: AlertTriangle,label: 'Overdue' },
+  partial: { c: '#5b8af0', bg: 'rgba(91,138,240,.1)',  Icon: Clock,        label: 'Partial' },
 }
 
-// -- generate voucher ---------------------
-
-function GenerateModal({ onClose, onSuccess }) {
-  const [students, setStudents] = useState([])
-  const [semesters, setSemesters] = useState([])
-  const [form, setForm] = useState({
-    student_id: '', semester_id: '',
-    due_date: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0]
-  })
-  const [loading, setLoading] = useState(false)
-  const [loadingData, setLoadingData] = useState(true)
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
-
-  useEffect(() => {
-    Promise.all([
-      adminAPI.getStudents(1, 200),
-      adminAPI.getSemesters()
-    ]).then(([s, sem]) => {
-      setStudents(s.data.data?.students || [])
-      setSemesters(sem.data.data?.semesters || [])
-    }).finally(() => setLoadingData(false))
-  }, [])
-
-  const handleSubmit = async () => {
-    if (!form.student_id || !form.semester_id || !form.due_date) {
-      toast.error('All fields required'); return
-    }
-    setLoading(true)
-    try {
-      await adminAPI.createVoucher(form)
-      toast.success('Voucher generated!')
-      onSuccess(); onClose()
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Failed to generate voucher')
-    } finally { setLoading(false) }
-  }
-
-  const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-50 transition-all bg-white"
-
+/* ─── Modal Shell ────────────────────────────────── */
+function Modal({ children, maxW = 480, onClose }) {
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <h3 className="font-display font-bold text-lg text-slate-800">Generate Fee Voucher</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl"><X size={18} className="text-slate-500" /></button>
-        </div>
-        <div className="p-6 space-y-4">
-          {loadingData ? (
-            <div className="flex justify-center py-8"><Loader2 className="animate-spin text-blue-600 w-5 h-5" /></div>
-          ) : (
-            <>
-              <div>
-                <label className="block text-xs text-slate-500 font-medium mb-1.5">Student <span className="text-red-400">*</span></label>
-                <select className={inputCls} value={form.student_id} onChange={e => set('student_id', Number(e.target.value))}>
-                  <option value="">-- Select Student --</option>
-                  {students.map(s => (
-                    <option key={s.user_id} value={s.user_id}>{s.full_name} — {s.roll_number}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 font-medium mb-1.5">Semester <span className="text-red-400">*</span></label>
-                <select className={inputCls} value={form.semester_id} onChange={e => set('semester_id', Number(e.target.value))}>
-                  <option value="">-- Select Semester --</option>
-                  {semesters.map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs text-slate-500 font-medium mb-1.5">Due Date <span className="text-red-400">*</span></label>
-                <input className={inputCls} type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)} />
-              </div>
-            </>
-          )}
-        </div>
-        <div className="p-6 pt-0 flex gap-3">
-          <button onClick={onClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium rounded-xl transition-colors">Cancel</button>
-          <button onClick={handleSubmit} disabled={loading || loadingData}
-            className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2">
-            {loading ? <><Loader2 size={15} className="animate-spin" /> Generating...</> : 'Generate'}
-          </button>
-        </div>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(8,12,20,.72)', backdropFilter: 'blur(10px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }} onClick={e => e.target === e.currentTarget && onClose?.()}>
+      <div style={{ width: '100%', maxWidth: maxW, background: 'var(--neu-surface)', boxShadow: '14px 14px 36px var(--neu-shadow-dark), -6px -6px 20px var(--neu-shadow-light)', border: '1px solid var(--neu-border)', borderRadius: '1.5rem', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'neu-slide-up .2s cubic-bezier(.34,1.56,.64,1) both' }}>
+        {children}
       </div>
     </div>
   )
 }
-
-// ── Main Page ──────────────────────────────────────
-export default function FeeVouchersPage() {
-  const [vouchers, setVouchers] = useState([]);
-  const [showGenerate, setShowGenerate] = useState(false)
-  const [pagination, setPagination] = useState({
-    total: 0,
-    page: 1,
-    per_page: 20,
-    total_pages: 1,
-  });
-  const [loading, setLoading] = useState(true);
-  const [filterStatus, setFilterStatus] = useState("");
-  const [search, setSearch] = useState("");
-  const [payVoucher, setPayVoucher] = useState(null);
-  const [updatingOverdue, setUpdatingOverdue] = useState(false);
-
-  const fetchVouchers = useCallback(
-    async (page = 1) => {
-      setLoading(true);
-      try {
-        const params = { page, per_page: 20 };
-        if (filterStatus) params.status = filterStatus;
-        const res = await adminAPI.getVouchers(params);
-        setVouchers(res.data.data?.vouchers || []);
-        setPagination(
-          res.data.data?.pagination || {
-            total: 0,
-            page: 1,
-            per_page: 20,
-            total_pages: 1,
-          },
-        );
-      } catch {
-        toast.error("Failed to load vouchers");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [filterStatus],
-  );
-
-  useEffect(() => {
-    fetchVouchers();
-  }, [filterStatus]);
-
-  const handleUpdateOverdue = async () => {
-    setUpdatingOverdue(true);
-    try {
-      const res = await adminAPI.updateOverdueVouchers();
-      toast.success(
-        `${res.data.data?.updated_count || 0} vouchers updated to overdue`,
-      );
-      fetchVouchers();
-    } catch {
-      toast.error("Failed to update overdue");
-    } finally {
-      setUpdatingOverdue(false);
-    }
-  };
-
-  const filtered = vouchers.filter(
-    (v) =>
-      !search ||
-      v.student_name?.toLowerCase().includes(search.toLowerCase()) ||
-      v.voucher_number?.toLowerCase().includes(search.toLowerCase()),
-  );
-
-  // Stats from current page
-  const stats = {
-    total: pagination.total,
-    paid: vouchers.filter((v) => v.status === "paid").length,
-    unpaid: vouchers.filter((v) => v.status === "unpaid").length,
-    overdue: vouchers.filter((v) => v.status === "overdue").length,
-  };
-
+function MHead({ icon: Icon, title, sub, onClose, iconColor = '#22a06b' }) {
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-display font-bold text-2xl text-slate-800">
-            Fee Vouchers
-          </h1>
-          <p className="text-slate-400 text-sm mt-0.5">
-            {pagination.total} total vouchers
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowGenerate(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-          >
-            <Plus size={16} /> Generate Voucher
-          </button>
-          <button
-            onClick={handleUpdateOverdue}
-            disabled={updatingOverdue}
-            className="flex items-center gap-2 bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors"
-          >
-            {updatingOverdue ? (
-              <Loader2 size={15} className="animate-spin" />
-            ) : (
-              <AlertTriangle size={15} />
-            )}
-            Update Overdue
-          </button>
-        </div>
+    <div style={{ padding: '1.3rem 1.5rem', borderBottom: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+      <div style={{ width: 38, height: 38, borderRadius: '.75rem', background: `${iconColor}18`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        <Icon size={17} style={{ color: iconColor }} />
       </div>
-      {/* Stat pills */}
-      <div className="flex gap-3 flex-wrap">
-        {[
-          {
-            label: "All",
-            value: pagination.total,
-            color: "bg-slate-100 text-slate-600",
-            key: "",
-          },
-          {
-            label: "Paid",
-            value: stats.paid,
-            color: "bg-emerald-100 text-emerald-700",
-            key: "paid",
-          },
-          {
-            label: "Unpaid",
-            value: stats.unpaid,
-            color: "bg-red-100 text-red-700",
-            key: "unpaid",
-          },
-          {
-            label: "Overdue",
-            value: stats.overdue,
-            color: "bg-orange-100 text-orange-700",
-            key: "overdue",
-          },
-        ].map((s) => (
-          <button
-            key={s.key}
-            onClick={() => setFilterStatus(s.key)}
-            className={`px-4 py-2 rounded-xl text-sm font-semibold transition-all ${filterStatus === s.key ? `${s.color} ring-2 ring-offset-1 ring-current` : `${s.color} opacity-70 hover:opacity-100`}`}
-          >
-            {s.label} <span className="ml-1 opacity-80">({s.value})</span>
-          </button>
-        ))}
+      <div style={{ flex: 1 }}>
+        <h2 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>{title}</h2>
+        {sub && <p style={{ fontSize: '.72rem', color: 'var(--neu-text-ghost)', marginTop: '.1rem' }}>{sub}</p>}
       </div>
-      {/* Table */}
-      <div className="bg-white rounded-2xl border border-slate-200">
-        <div className="p-4 border-b border-slate-100 flex items-center gap-3">
-          <div className="relative flex-1 max-w-sm">
-            <Search
-              size={15}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-            />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search student or voucher..."
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 rounded-xl text-sm text-slate-600 placeholder-slate-400 focus:outline-none focus:bg-slate-100 transition-colors"
-            />
+      <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neu-text-ghost)' }}><X size={18} /></button>
+    </div>
+  )
+}
+function MFoot({ onClose, onConfirm, confirmLabel, confirmColor = 'linear-gradient(145deg,#22a06b,#1a7d54)', loading }) {
+  return (
+    <div style={{ padding: '.9rem 1.5rem', borderTop: '1px solid var(--neu-border)', display: 'flex', gap: '.6rem' }}>
+      <button onClick={onClose} style={{ ...iS, cursor: 'pointer', textAlign: 'center', fontWeight: 600, color: 'var(--neu-text-secondary)', flex: 1, padding: '.65rem', boxShadow: 'none' }}>Cancel</button>
+      <button onClick={onConfirm} disabled={loading} style={{ flex: 1, padding: '.65rem', borderRadius: '.75rem', border: 'none', background: confirmColor, boxShadow: '0 4px 14px rgba(34,160,107,.3)', color: '#fff', fontWeight: 700, fontSize: '.85rem', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? .7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.4rem', fontFamily: "'DM Sans',sans-serif" }}>
+        {loading && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}{confirmLabel}
+      </button>
+    </div>
+  )
+}
+
+/* ─── View Modal ─────────────────────────────────── */
+function ViewModal({ voucher: v, onClose, onPay }) {
+  const sc = STATUS_CFG[v.status] || STATUS_CFG.unpaid
+  const tile = { background: 'var(--neu-surface-deep)', borderRadius: '.8rem', padding: '.7rem 1rem', boxShadow: 'inset 2px 2px 5px var(--neu-shadow-dark), inset -1px -1px 4px var(--neu-shadow-light)' }
+  const pct  = v.total_due > 0 ? Math.min(((v.total_paid || 0) / v.total_due) * 100, 100) : 0
+  return (
+    <Modal onClose={onClose}>
+      <MHead icon={sc.Icon} title="Voucher Detail" sub={v.voucher_number} onClose={onClose} iconColor={sc.c} />
+      <div style={{ padding: '1.1rem 1.4rem', display: 'flex', flexDirection: 'column', gap: '.5rem', overflowY: 'auto' }}>
+        {/* Student */}
+        <div style={tile}>
+          <p style={{ fontSize: '.62rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: '.3rem' }}>Student</p>
+          <p style={{ fontSize: '.92rem', fontWeight: 700, color: 'var(--neu-text-primary)' }}>{v.student_name}</p>
+          <p style={{ fontSize: '.7rem', color: 'var(--neu-text-ghost)', fontFamily: 'monospace' }}>{v.roll_number}</p>
+        </div>
+
+        {/* Amount tiles */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '.5rem' }}>
+          {[
+            { label: 'Base Amount',  value: formatCurrency(v.amount),      c: '#5b8af0' },
+            { label: 'Fine',         value: v.fine_amount > 0 ? formatCurrency(v.fine_amount) : '—', c: '#f97316' },
+            { label: 'Total Due',    value: formatCurrency(v.total_due),   c: 'var(--neu-text-primary)' },
+          ].map(r => (
+            <div key={r.label} style={{ ...tile, textAlign: 'center' }}>
+              <p style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: '.2rem' }}>{r.label}</p>
+              <p style={{ fontSize: '.92rem', fontWeight: 800, color: r.c, fontFamily: 'Outfit,sans-serif' }}>{r.value}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Payment bar */}
+        <div style={tile}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '.5rem' }}>
+            <span style={{ fontSize: '.68rem', fontWeight: 700, color: 'var(--neu-text-ghost)' }}>Payment Progress</span>
+            <span style={{ fontSize: '.68rem', fontWeight: 800, color: sc.c }}>{pct.toFixed(0)}% paid</span>
+          </div>
+          <div style={{ height: 7, background: 'var(--neu-border)', borderRadius: 99, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${pct}%`, background: sc.c, borderRadius: 99, transition: 'width .5s ease' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '.4rem' }}>
+            <span style={{ fontSize: '.68rem', color: 'var(--neu-text-ghost)' }}>Paid: {formatCurrency(v.total_paid || 0)}</span>
+            <span style={{ fontSize: '.68rem', color: 'var(--neu-text-ghost)' }}>Remaining: {formatCurrency(Math.max((v.total_due || 0) - (v.total_paid || 0), 0))}</span>
           </div>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100">
-                {[
-                  "Voucher No",
-                  "Student",
-                  "Amount",
-                  "Fine",
-                  "Total Due",
-                  "Due Date",
-                  "Status",
-                  "Action",
-                ].map((h) => (
-                  <th
-                    key={h}
-                    className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {loading ? (
-                Array.from({ length: 6 }).map((_, i) => (
-                  <tr key={i} className="animate-pulse">
-                    {Array.from({ length: 8 }).map((_, j) => (
-                      <td key={j} className="px-4 py-3">
-                        <div className="h-4 bg-slate-100 rounded-lg" />
-                      </td>
-                    ))}
-                  </tr>
-                ))
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="text-center py-16 text-slate-400">
-                    No vouchers found
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((v) => {
-                  const sc = STATUS_CONFIG[v.status] || STATUS_CONFIG.unpaid;
-                  const StatusIcon = sc.icon;
-                  const isPastDue =
-                    new Date(v.due_date) < new Date() && v.status !== "paid";
-                  return (
-                    <tr
-                      key={v.id}
-                      className="hover:bg-slate-50 transition-colors"
-                    >
-                      <td className="px-4 py-3 font-mono text-xs text-blue-600 font-bold">
-                        {v.voucher_number}
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="font-medium text-slate-700">
-                          {v.student_name}
-                        </p>
-                        <p className="text-xs text-slate-400 font-mono">
-                          {v.roll_number}
-                        </p>
-                      </td>
-                      <td className="px-4 py-3 text-slate-700">
-                        {formatCurrency(v.amount)}
-                      </td>
-                      <td className="px-4 py-3">
-                        {v.fine_amount > 0 ? (
-                          <span className="text-red-600 font-medium">
-                            {formatCurrency(v.fine_amount)}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 font-semibold text-slate-800">
-                        {formatCurrency(v.total_due)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={
-                            isPastDue && v.status !== "paid"
-                              ? "text-red-600 font-medium"
-                              : "text-slate-500"
-                          }
-                        >
-                          {formatDate(v.due_date)}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span
-                          className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-0.5 rounded-full font-semibold ${sc.cls}`}
-                        >
-                          <StatusIcon size={11} className={sc.iconCls} />
-                          {v.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        {v.status !== "paid" && (
-                          <button
-                            onClick={() => setPayVoucher(v)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 rounded-xl text-xs font-semibold transition-colors"
-                          >
-                            <DollarSign size={11} /> Pay
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+
+        {/* Status + due date */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.5rem' }}>
+          <div style={tile}>
+            <p style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: '.3rem' }}>Status</p>
+            <span style={{ fontSize: '.75rem', fontWeight: 800, padding: '.25rem .65rem', background: sc.bg, color: sc.c, borderRadius: '.45rem', display: 'inline-block' }}>{sc.label}</span>
+          </div>
+          <div style={tile}>
+            <p style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: '.3rem' }}>Due Date</p>
+            <p style={{ fontSize: '.88rem', fontWeight: 700, color: new Date(v.due_date) < new Date() && v.status !== 'paid' ? '#ef4444' : 'var(--neu-text-primary)' }}>{formatDate(v.due_date)}</p>
+          </div>
         </div>
-        {/* Pagination */}
-        {pagination.total_pages > 1 && (
-          <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-between">
-            <p className="text-slate-400 text-sm">
-              Page {pagination.page} of {pagination.total_pages} (
-              {pagination.total} records)
-            </p>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => fetchVouchers(pagination.page - 1)}
-                disabled={pagination.page === 1}
-                className="p-2 hover:bg-slate-100 disabled:opacity-40 rounded-lg transition-colors"
-              >
-                <ChevronLeft size={16} className="text-slate-600" />
-              </button>
-              {Array.from(
-                { length: Math.min(pagination.total_pages, 5) },
-                (_, i) => i + 1,
-              ).map((p) => (
-                <button
-                  key={p}
-                  onClick={() => fetchVouchers(p)}
-                  className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${p === pagination.page ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-100"}`}
-                >
-                  {p}
-                </button>
+
+        {/* Fee breakdown */}
+        {(v.tuition_fee || v.admission_fee || v.library_fee) && (
+          <div style={tile}>
+            <p style={{ fontSize: '.62rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: '.5rem' }}>Fee Breakdown</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '.3rem' }}>
+              {[
+                { label: 'Tuition',   val: v.tuition_fee   },
+                { label: 'Admission', val: v.admission_fee },
+                { label: 'Library',   val: v.library_fee   },
+                { label: 'Sports',    val: v.sports_fee    },
+              ].filter(f => f.val > 0).map(f => (
+                <div key={f.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.78rem' }}>
+                  <span style={{ color: 'var(--neu-text-muted)' }}>{f.label} Fee</span>
+                  <span style={{ fontWeight: 700, color: 'var(--neu-text-primary)' }}>{formatCurrency(f.val)}</span>
+                </div>
               ))}
-              <button
-                onClick={() => fetchVouchers(pagination.page + 1)}
-                disabled={pagination.page === pagination.total_pages}
-                className="p-2 hover:bg-slate-100 disabled:opacity-40 rounded-lg transition-colors"
-              >
-                <ChevronRight size={16} className="text-slate-600" />
-              </button>
             </div>
           </div>
         )}
       </div>
-      {payVoucher && (
-        <PayModal
-          voucher={payVoucher}
-          onClose={() => setPayVoucher(null)}
-          onSuccess={() => fetchVouchers(pagination.page)}
-        />
-      )}
-      {showGenerate && (
-        <GenerateModal 
-          onClose={() => setShowGenerate(false)} 
-          onSuccess={() => fetchVouchers(1)} 
-        />
-      )}
-    </div>
-  );
+
+      <div style={{ padding: '.9rem 1.4rem', borderTop: '1px solid var(--neu-border)', display: 'flex', gap: '.6rem' }}>
+        <button onClick={onClose} style={{ ...iS, cursor: 'pointer', textAlign: 'center', fontWeight: 600, color: 'var(--neu-text-secondary)', flex: 1, padding: '.65rem', boxShadow: 'none' }}>Close</button>
+        {v.status !== 'paid' && (
+          <button onClick={() => { onClose(); onPay(v) }} style={{ flex: 1, padding: '.65rem', borderRadius: '.75rem', border: 'none', background: 'linear-gradient(145deg,#22a06b,#1a7d54)', boxShadow: '0 4px 14px rgba(34,160,107,.35)', color: '#fff', fontWeight: 700, fontSize: '.85rem', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.45rem', fontFamily: "'DM Sans',sans-serif" }}>
+            <DollarSign size={14} />Record Payment
+          </button>
+        )}
+      </div>
+    </Modal>
+  )
+}
+
+/* ─── Pay Modal ──────────────────────────────────── */
+function PayModal({ voucher: v, onClose, onSuccess }) {
+  const remaining = (v.total_due || 0) - (v.total_paid || 0)
+  const [form, setForm] = useState({
+    amount_paid: remaining > 0 ? remaining : v.total_due,
+    payment_method: 'bank_transfer',
+    reference_number: '', bank_name: '', receipt_number: '',
+    payment_date: new Date().toISOString().split('T')[0],
+  })
+  const [loading, setLoading] = useState(false)
+  const set = (k, val) => setForm(p => ({ ...p, [k]: val }))
+
+  const submit = async () => {
+    if (!form.amount_paid || !form.reference_number) { toast.error('Amount & reference required'); return }
+    setLoading(true)
+    try { await adminAPI.payVoucher(v.id, form); toast.success('Payment recorded!'); onSuccess(); onClose() }
+    catch (e) { toast.error(e.response?.data?.message || 'Failed') }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <MHead icon={DollarSign} title="Record Payment" sub={v.voucher_number} onClose={onClose} />
+      <div style={{ padding: '1.2rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '.8rem', overflowY: 'auto' }}>
+
+        {/* Summary */}
+        <div style={{ padding: '.85rem 1rem', borderRadius: '.9rem', background: 'rgba(91,138,240,.07)', border: '1px solid rgba(91,138,240,.18)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '.3rem', fontSize: '.8rem' }}>
+            <span style={{ color: 'var(--neu-text-muted)' }}>Total Due</span>
+            <span style={{ fontWeight: 700, color: 'var(--neu-text-primary)' }}>{formatCurrency(v.total_due)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '.3rem', fontSize: '.8rem' }}>
+            <span style={{ color: 'var(--neu-text-muted)' }}>Already Paid</span>
+            <span style={{ fontWeight: 700, color: '#22a06b' }}>{formatCurrency(v.total_paid || 0)}</span>
+          </div>
+          <div style={{ borderTop: '1px solid rgba(91,138,240,.2)', paddingTop: '.3rem', display: 'flex', justifyContent: 'space-between', fontSize: '.85rem' }}>
+            <span style={{ fontWeight: 700, color: 'var(--neu-text-primary)' }}>Remaining</span>
+            <span style={{ fontWeight: 800, color: '#ef4444', fontFamily: 'Outfit,sans-serif' }}>{formatCurrency(remaining)}</span>
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+          <F label="Amount Paid *"><input style={iS} type="number" value={form.amount_paid} onChange={e => set('amount_paid', e.target.value)} /></F>
+          <F label="Payment Method">
+            <select style={iS} value={form.payment_method} onChange={e => set('payment_method', e.target.value)}>
+              <option value="bank_transfer">Bank Transfer</option>
+              <option value="cash">Cash</option>
+              <option value="cheque">Cheque</option>
+              <option value="online">Online</option>
+            </select>
+          </F>
+        </div>
+        <F label="Reference Number *"><input style={iS} value={form.reference_number} onChange={e => set('reference_number', e.target.value)} placeholder="TXN-2025-001" /></F>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+          <F label="Bank Name"><input style={iS} value={form.bank_name} onChange={e => set('bank_name', e.target.value)} placeholder="e.g. HBL" /></F>
+          <F label="Receipt Number"><input style={iS} value={form.receipt_number} onChange={e => set('receipt_number', e.target.value)} placeholder="RCP-001" /></F>
+        </div>
+        <F label="Payment Date"><input style={iS} type="date" value={form.payment_date} onChange={e => set('payment_date', e.target.value)} /></F>
+      </div>
+      <MFoot onClose={onClose} onConfirm={submit} confirmLabel="Record Payment" loading={loading} />
+    </Modal>
+  )
+}
+
+/* ─── Generate Voucher Modal ─────────────────────── */
+function GenerateModal({ onClose, onSuccess }) {
+  const [students,     setStudents]     = useState([])
+  const [semesters,    setSemesters]    = useState([])
+  const [form,         setForm]         = useState({ student_id: '', semester_id: '', due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] })
+  const [loading,      setLoading]      = useState(false)
+  const [loadingData,  setLoadingData]  = useState(true)
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+
+  useEffect(() => {
+    Promise.all([adminAPI.getStudents(1, 200), adminAPI.getSemesters()])
+      .then(([s, sem]) => { setStudents(s.data.data?.students || []); setSemesters(sem.data.data?.semesters || []) })
+      .finally(() => setLoadingData(false))
+  }, [])
+
+  const submit = async () => {
+    if (!form.student_id || !form.semester_id || !form.due_date) { toast.error('All fields required'); return }
+    setLoading(true)
+    try { await adminAPI.createVoucher(form); toast.success('Voucher generated!'); onSuccess(); onClose() }
+    catch (e) { toast.error(e.response?.data?.message || 'Failed') }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <Modal onClose={onClose} maxW={440}>
+      <MHead icon={Plus} title="Generate Voucher" onClose={onClose} iconColor="#5b8af0" />
+      <div style={{ padding: '1.2rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '.8rem' }}>
+        {loadingData ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Loader2 size={24} style={{ color: '#5b8af0', animation: 'spin 1s linear infinite' }} /></div>
+        ) : (
+          <>
+            <F label="Student *">
+              <select style={iS} value={form.student_id} onChange={e => set('student_id', e.target.value)}>
+                <option value="">— Select Student —</option>
+                {students.map(s => <option key={s.user_id} value={s.user_id}>{s.full_name} ({s.roll_number})</option>)}
+              </select>
+            </F>
+            <F label="Semester *">
+              <select style={iS} value={form.semester_id} onChange={e => set('semester_id', e.target.value)}>
+                <option value="">— Select Semester —</option>
+                {semesters.map(s => <option key={s.id} value={s.id}>{s.name}{s.is_active ? ' ★' : ''}</option>)}
+              </select>
+            </F>
+            <F label="Due Date *">
+              <input style={iS} type="date" value={form.due_date} onChange={e => set('due_date', e.target.value)} />
+            </F>
+          </>
+        )}
+      </div>
+      <MFoot onClose={onClose} onConfirm={submit} confirmLabel="Generate" confirmColor="linear-gradient(145deg,#5b8af0,#3a6bd4)" loading={loading || loadingData} />
+    </Modal>
+  )
+}
+
+/* ─── Voucher Row ────────────────────────────────── */
+function VoucherRow({ v, onView, onPay }) {
+  const sc        = STATUS_CFG[v.status] || STATUS_CFG.unpaid
+  const isPastDue = new Date(v.due_date) < new Date() && v.status !== 'paid'
+  const pct       = v.total_due > 0 ? Math.min(((v.total_paid || 0) / v.total_due) * 100, 100) : 0
+  const { onContextMenu, menuState, closeMenu } = useContextMenu()
+
+  const menuItems = [
+    { label: 'View Details',    icon: Eye,        onClick: () => onView(v) },
+    ...(v.status !== 'paid' ? [{ label: 'Record Payment', icon: DollarSign, onClick: () => onPay(v) }] : []),
+  ]
+
+  return (
+    <>
+      <div className={`vchr-row st-${v.status}`} onContextMenu={onContextMenu}>
+        {/* Voucher No */}
+        <span style={{ fontSize: '.72rem', fontWeight: 800, color: '#5b8af0', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.voucher_number}</span>
+
+        {/* Student */}
+        <div style={{ minWidth: 0 }}>
+          <p style={{ fontSize: '.84rem', fontWeight: 600, color: 'var(--neu-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.student_name}</p>
+          <p style={{ fontSize: '.64rem', color: 'var(--neu-text-ghost)', fontFamily: 'monospace' }}>{v.roll_number}</p>
+        </div>
+
+        {/* Amount */}
+        <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>{formatCurrency(v.total_due)}</span>
+
+        {/* Fine */}
+        {v.fine_amount > 0
+          ? <span style={{ fontSize: '.78rem', fontWeight: 700, color: '#f97316', fontFamily: 'Outfit,sans-serif' }}>{formatCurrency(v.fine_amount)}</span>
+          : <span style={{ fontSize: '.72rem', color: 'var(--neu-text-ghost)', opacity: .4 }}>—</span>}
+
+        {/* Progress bar */}
+        <div>
+          <div style={{ height: 5, background: 'var(--neu-surface-deep)', borderRadius: 99, overflow: 'hidden', boxShadow: 'inset 1px 1px 3px var(--neu-shadow-dark)', marginBottom: '.2rem' }}>
+            <div style={{ height: '100%', width: `${pct}%`, background: sc.c, borderRadius: 99 }} />
+          </div>
+          <span style={{ fontSize: '.6rem', color: 'var(--neu-text-ghost)' }}>{pct.toFixed(0)}% paid</span>
+        </div>
+
+        {/* Due date */}
+        <span style={{ fontSize: '.72rem', fontWeight: 600, color: isPastDue ? '#ef4444' : 'var(--neu-text-muted)' }}>{formatDate(v.due_date)}</span>
+
+        {/* Status badge */}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.3rem', fontSize: '.65rem', fontWeight: 800, padding: '.2rem .55rem', background: sc.bg, color: sc.c, borderRadius: '.4rem' }}>
+          <sc.Icon size={11} />{sc.label}
+        </span>
+
+        {/* Pay button */}
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          {v.status !== 'paid' && (
+            <button onClick={() => onPay(v)} style={{ display: 'flex', alignItems: 'center', gap: '.3rem', padding: '.3rem .7rem', background: 'rgba(34,160,107,.1)', border: '1px solid rgba(34,160,107,.25)', borderRadius: '.55rem', color: '#22a06b', fontWeight: 700, fontSize: '.72rem', cursor: 'pointer', fontFamily: "'DM Sans',sans-serif", transition: 'all .14s' }}
+              onMouseEnter={e => e.currentTarget.style.background = 'rgba(34,160,107,.2)'}
+              onMouseLeave={e => e.currentTarget.style.background = 'rgba(34,160,107,.1)'}>
+              <DollarSign size={11} />Pay
+            </button>
+          )}
+        </div>
+
+        <span className="rc-hint">⊞ right-click</span>
+      </div>
+      <ContextMenu state={menuState} onClose={closeMenu} items={menuItems} />
+    </>
+  )
+}
+
+/* ═══════════════════════════════════════════════════
+   MAIN PAGE
+═══════════════════════════════════════════════════ */
+export default function FeeVouchersPage() {
+  const [vouchers,        setVouchers]        = useState([])
+  const [pagination,      setPagination]      = useState({ total: 0, page: 1, per_page: 20, total_pages: 1 })
+  const [loading,         setLoading]         = useState(true)
+  const [filterStatus,    setFilterStatus]    = useState('')
+  const [search,          setSearch]          = useState('')
+  const [payVoucher,      setPayVoucher]      = useState(null)
+  const [viewVoucher,     setViewVoucher]     = useState(null)
+  const [showGenerate,    setShowGenerate]    = useState(false)
+  const [updatingOverdue, setUpdatingOverdue] = useState(false)
+
+  const fetchVouchers = useCallback(async (page = 1) => {
+    setLoading(true)
+    try {
+      const params = { page, per_page: 20 }
+      if (filterStatus) params.status = filterStatus
+      const res = await adminAPI.getVouchers(params)
+      setVouchers(res.data.data?.vouchers || [])
+      setPagination(res.data.data?.pagination || { total: 0, page: 1, per_page: 20, total_pages: 1 })
+    } catch { toast.error('Failed to load vouchers') }
+    finally { setLoading(false) }
+  }, [filterStatus])
+
+  useEffect(() => { fetchVouchers() }, [filterStatus])
+
+  const handleUpdateOverdue = async () => {
+    setUpdatingOverdue(true)
+    try { const res = await adminAPI.updateOverdueVouchers(); toast.success(`${res.data.data?.updated_count || 0} vouchers updated`); fetchVouchers() }
+    catch { toast.error('Failed to update overdue') }
+    finally { setUpdatingOverdue(false) }
+  }
+
+  const filtered = vouchers.filter(v => !search || v.student_name?.toLowerCase().includes(search.toLowerCase()) || v.voucher_number?.toLowerCase().includes(search.toLowerCase()))
+
+  const stats = {
+    paid:    vouchers.filter(v => v.status === 'paid').length,
+    unpaid:  vouchers.filter(v => v.status === 'unpaid').length,
+    overdue: vouchers.filter(v => v.status === 'overdue').length,
+    partial: vouchers.filter(v => v.status === 'partial').length,
+  }
+
+  const totalCollected = vouchers.filter(v => v.status === 'paid').reduce((s, v) => s + parseFloat(v.total_due || 0), 0)
+
+  return (
+    <>
+      <style>{CSS}</style>
+      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.3rem', paddingBottom: '2rem' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.7rem' }}>
+            <div style={{ width: 42, height: 42, borderRadius: '.9rem', background: 'linear-gradient(145deg,rgba(34,160,107,.18),rgba(34,160,107,.08))', boxShadow: '5px 5px 14px var(--neu-shadow-dark), -3px -3px 10px var(--neu-shadow-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <CreditCard size={20} style={{ color: '#22a06b' }} />
+            </div>
+            <div>
+              <h1 style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', letterSpacing: '-.02em' }}>Fee Vouchers</h1>
+              <p style={{ fontSize: '.78rem', color: 'var(--neu-text-ghost)', marginTop: 2 }}>{pagination.total} total vouchers</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '.6rem', flexWrap: 'wrap' }}>
+            <button onClick={() => setShowGenerate(true)} style={{ display: 'flex', alignItems: 'center', gap: '.5rem', padding: '.6rem 1.1rem', background: 'linear-gradient(145deg,#5b8af0,#3a6bd4)', boxShadow: '0 4px 14px rgba(91,138,240,.35), 5px 5px 12px var(--neu-shadow-dark)', borderRadius: '.85rem', border: 'none', color: '#fff', fontWeight: 700, fontSize: '.8rem', cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
+              <Plus size={14} />Generate
+            </button>
+            <button onClick={handleUpdateOverdue} disabled={updatingOverdue} style={{ display: 'flex', alignItems: 'center', gap: '.5rem', padding: '.6rem 1.1rem', background: 'linear-gradient(145deg,#f97316,#ea6c00)', boxShadow: '0 4px 14px rgba(249,115,22,.3), 5px 5px 12px var(--neu-shadow-dark)', borderRadius: '.85rem', border: 'none', color: '#fff', fontWeight: 700, fontSize: '.8rem', cursor: updatingOverdue ? 'not-allowed' : 'pointer', opacity: updatingOverdue ? .7 : 1, fontFamily: "'DM Sans',sans-serif" }}>
+              {updatingOverdue ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <AlertTriangle size={14} />}Update Overdue
+            </button>
+          </div>
+        </div>
+
+        {/* KPI tiles */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '.75rem' }}>
+          {[
+            { label: 'Paid',       value: stats.paid,       c: '#22a06b', bg: 'rgba(34,160,107,.1)',  Icon: CheckCircle2  },
+            { label: 'Unpaid',     value: stats.unpaid,     c: '#ef4444', bg: 'rgba(239,68,68,.1)',   Icon: Clock         },
+            { label: 'Overdue',    value: stats.overdue,    c: '#f97316', bg: 'rgba(249,115,22,.1)',  Icon: AlertTriangle },
+            { label: 'Collected',  value: formatCurrency(totalCollected), c: '#5b8af0', bg: 'rgba(91,138,240,.1)',  Icon: DollarSign },
+          ].map(t => (
+            <div key={t.label} style={{ background: 'var(--neu-surface)', border: '1px solid var(--neu-border)', borderRadius: '1rem', padding: '.9rem 1.1rem', boxShadow: '6px 6px 16px var(--neu-shadow-dark), -3px -3px 10px var(--neu-shadow-light)', display: 'flex', alignItems: 'center', gap: '.75rem' }}>
+              <div style={{ width: 38, height: 38, borderRadius: '.75rem', background: t.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <t.Icon size={17} style={{ color: t.c }} />
+              </div>
+              <div>
+                <p style={{ fontSize: '.65rem', color: 'var(--neu-text-ghost)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.04em' }}>{t.label}</p>
+                <p style={{ fontSize: '1.25rem', fontWeight: 800, color: t.c, fontFamily: 'Outfit,sans-serif', lineHeight: 1.1, marginTop: '.1rem' }}>{t.value}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Filter bar */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '.65rem', flexWrap: 'wrap' }}>
+          {/* Status pills */}
+          {[
+            { key: '',        label: 'All',     count: pagination.total },
+            { key: 'paid',    label: 'Paid',    count: stats.paid       },
+            { key: 'unpaid',  label: 'Unpaid',  count: stats.unpaid     },
+            { key: 'overdue', label: 'Overdue', count: stats.overdue    },
+            { key: 'partial', label: 'Partial', count: stats.partial    },
+          ].map(p => (
+            <button key={p.key} onClick={() => setFilterStatus(p.key)} className={`stat-pill ${filterStatus === p.key ? `act-${p.key || 'all'}` : ''}`}>
+              {p.label}
+              <span style={{ fontSize: '.68rem', fontWeight: 800, opacity: .8 }}>{p.count}</span>
+            </button>
+          ))}
+
+          {/* Search */}
+          <div style={{ marginLeft: 'auto', position: 'relative', width: 200 }}>
+            <Search size={13} style={{ position: 'absolute', top: '50%', left: 10, transform: 'translateY(-50%)', color: 'var(--neu-text-ghost)' }} />
+            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Student or voucher…" style={{ ...iS, paddingLeft: '2rem', width: '100%' }} />
+          </div>
+        </div>
+
+        {/* Main table card */}
+        <div style={{ background: 'var(--neu-surface)', border: '1px solid var(--neu-border)', borderRadius: '1.25rem', overflow: 'hidden', boxShadow: '6px 6px 16px var(--neu-shadow-dark), -3px -3px 10px var(--neu-shadow-light)' }}>
+
+          {/* Table header */}
+          <div style={{ padding: '.55rem 1rem', borderBottom: '1px solid var(--neu-border)', background: 'var(--neu-surface-deep)', display: 'grid', gridTemplateColumns: '130px 2fr 90px 70px 100px 90px 110px 80px', gap: '.5rem' }}>
+            {['Voucher #', 'Student', 'Total Due', 'Fine', 'Progress', 'Due Date', 'Status', 'Action'].map(h => (
+              <span key={h} style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</span>
+            ))}
+          </div>
+
+          {/* Rows */}
+          <div style={{ padding: '.4rem .5rem', display: 'flex', flexDirection: 'column', gap: '.15rem', minHeight: 200 }}>
+            {loading ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} style={{ height: 52, background: 'var(--neu-surface-deep)', borderRadius: '.85rem', animation: 'pulse 1.5s infinite', border: '1px solid var(--neu-border)' }} />
+              ))
+            ) : filtered.length === 0 ? (
+              <div style={{ padding: '4rem', textAlign: 'center' }}>
+                <CreditCard size={32} style={{ color: 'var(--neu-text-ghost)', opacity: .15, display: 'block', margin: '0 auto .8rem' }} />
+                <p style={{ color: 'var(--neu-text-secondary)', fontWeight: 600 }}>No vouchers found</p>
+              </div>
+            ) : filtered.map(v => (
+              <VoucherRow key={v.id} v={v} onView={setViewVoucher} onPay={setPayVoucher} />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {pagination.total_pages > 1 && (
+            <div style={{ padding: '.7rem 1rem', borderTop: '1px solid var(--neu-border)', background: 'var(--neu-surface-deep)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: '.72rem', color: 'var(--neu-text-ghost)' }}>Page {pagination.page} of {pagination.total_pages} ({pagination.total} records)</span>
+              <div style={{ display: 'flex', gap: '.3rem', alignItems: 'center' }}>
+                <button className="pg-btn" disabled={pagination.page === 1} onClick={() => fetchVouchers(pagination.page - 1)}>
+                  <ChevronLeft size={13} />
+                </button>
+                {Array.from({ length: Math.min(pagination.total_pages, 5) }, (_, i) => i + 1).map(p => (
+                  <button key={p} className={`pg-btn${p === pagination.page ? ' active' : ''}`} onClick={() => fetchVouchers(p)}>{p}</button>
+                ))}
+                <button className="pg-btn" disabled={pagination.page === pagination.total_pages} onClick={() => fetchVouchers(pagination.page + 1)}>
+                  <ChevronRight size={13} />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Modals */}
+        {payVoucher   && <PayModal      voucher={payVoucher}  onClose={() => setPayVoucher(null)}  onSuccess={() => fetchVouchers(pagination.page)} />}
+        {viewVoucher  && <ViewModal     voucher={viewVoucher} onClose={() => setViewVoucher(null)} onPay={setPayVoucher} />}
+        {showGenerate && <GenerateModal onClose={() => setShowGenerate(false)} onSuccess={() => fetchVouchers(1)} />}
+      </div>
+    </>
+  )
 }
