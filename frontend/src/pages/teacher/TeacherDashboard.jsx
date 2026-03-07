@@ -1,180 +1,48 @@
+// ═══════════════════════════════════════════════════════════════
+//  TeacherDashboard.jsx  —  frontend/src/pages/teacher/TeacherDashboard.jsx
+// ═══════════════════════════════════════════════════════════════
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import {
+  BookOpen, Users, ClipboardCheck, AlertTriangle,
+  FileText, PenSquare, BarChart3, Bell, MessageSquare,
+  ChevronRight, Calendar, Layers, ArrowRight, BookMarked, Loader2,
+} from 'lucide-react'
+import toast from 'react-hot-toast'
 import { teacherAPI } from '../../api/teacher.api'
 import { authStore } from '../../store/authStore'
-import toast from 'react-hot-toast'
-import {
-  BookOpen, Users, ClipboardCheck, FileText,
-  PenSquare, Bell, ChevronRight, AlertTriangle,
-  Clock, CheckCircle2, Loader2, TrendingUp,
-  BarChart3, Award, Calendar, Activity,
-  ArrowUpRight, Layers, MessageSquare, Star,
-  Target, Zap, BookMarked
-} from 'lucide-react'
 
-// ─── SVG Mini Charts ──────────────────────────────────────
+/* ─── helpers ────────────────────────────────────── */
+const PRIORITY_CFG = {
+  urgent: { c:'#ef4444', bg:'rgba(239,68,68,.09)',   label:'Urgent' },
+  high:   { c:'#f97316', bg:'rgba(249,115,22,.09)',  label:'High'   },
+  normal: { c:'#5b8af0', bg:'rgba(91,138,240,.09)',  label:'Normal' },
+  low:    { c:'#94a3b8', bg:'rgba(148,163,184,.09)', label:'Low'    },
+}
+const COURSE_COLORS = ['#5b8af0','#a78bfa','#34d399','#f59e0b','#f87171','#38bdf8','#fb923c']
 
-function AttendanceRing({ pct = 0, size = 80 }) {
-  const r = 28, cx = 40, cy = 40
-  const circ = 2 * Math.PI * r
-  const dash = (pct / 100) * circ
-  const color = pct >= 75 ? '#10b981' : pct >= 60 ? '#f59e0b' : '#ef4444'
-  return (
-    <svg width={size} height={size} viewBox="0 0 80 80">
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#f1f5f9" strokeWidth="9" />
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke={color} strokeWidth="9"
-        strokeDasharray={`${dash} ${circ - dash}`} strokeLinecap="round"
-        style={{ transform: 'rotate(-90deg)', transformOrigin: '40px 40px' }} />
-      <text x={cx} y={cy + 1} textAnchor="middle" fontSize="12" fontWeight="bold" fill="#1e293b">
-        {Math.round(pct)}%
-      </text>
-      <text x={cx} y={cy + 13} textAnchor="middle" fontSize="7" fill="#94a3b8">attend</text>
-    </svg>
-  )
+function timeAgo(d) {
+  const s = Math.floor((Date.now() - new Date(d)) / 1000)
+  if (s < 60)    return `${s}s ago`
+  if (s < 3600)  return `${Math.floor(s/60)}m ago`
+  if (s < 86400) return `${Math.floor(s/3600)}h ago`
+  return `${Math.floor(s/86400)}d ago`
 }
 
-function MiniBarChart({ bars = [], height = 56 }) {
-  if (!bars.length) return null
-  const max = Math.max(...bars.map(b => b.v), 1)
-  const w = 160
-  const bw = Math.floor(w / bars.length) - 3
-  return (
-    <svg viewBox={`0 0 ${w} ${height}`} className="w-full" style={{ height }}>
-      {bars.map((bar, i) => {
-        const bh = Math.max(3, (bar.v / max) * (height - 14))
-        const x = i * (w / bars.length) + 1
-        return (
-          <g key={i}>
-            <rect x={x} y={height - bh - 12} width={bw} height={bh} rx="2"
-              fill={bar.color || '#6366f1'} opacity={0.85} />
-            <text x={x + bw / 2} y={height - 1} textAnchor="middle" fontSize="7" fill="#94a3b8">
-              {bar.l}
-            </text>
-          </g>
-        )
-      })}
-    </svg>
-  )
-}
-
-function SparkLine({ values = [], color = '#6366f1', height = 36 }) {
-  if (values.length < 2) return null
-  const max = Math.max(...values, 1), min = Math.min(...values)
-  const range = max - min || 1
-  const w = 100, h = height
-  const pts = values.map((v, i) => {
-    const x = (i / (values.length - 1)) * w
-    const y = h - ((v - min) / range) * (h - 6) - 3
-    return `${x},${y}`
-  }).join(' ')
-  return (
-    <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ height }}>
-      <defs>
-        <linearGradient id="tsg" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <polygon points={`0,${h} ${pts} ${w},${h}`} fill="url(#tsg)" />
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="2"
-        strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function HBar({ label, value, max, color }) {
-  const pct = max ? Math.min((value / max) * 100, 100) : 0
-  return (
-    <div className="flex items-center gap-2.5">
-      <p className="text-xs text-slate-500 w-28 truncate flex-shrink-0">{label}</p>
-      <div className="flex-1 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-        <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, backgroundColor: color }} />
-      </div>
-      <p className="text-xs font-bold text-slate-700 w-8 text-right flex-shrink-0">{value}</p>
-    </div>
-  )
-}
-
-// ─── Section Header ───────────────────────────────────────
-function SH({ title, sub, icon: Icon, to }) {
-  const nav = useNavigate()
-  return (
-    <div className="flex items-center justify-between mb-4">
-      <div className="flex items-center gap-2.5">
-        {Icon && <div className="w-7 h-7 bg-slate-100 rounded-lg flex items-center justify-center">
-          <Icon size={14} className="text-slate-600" />
-        </div>}
-        <div>
-          <h2 className="text-slate-800 font-bold text-sm">{title}</h2>
-          {sub && <p className="text-slate-400 text-xs">{sub}</p>}
-        </div>
-      </div>
-      {to && (
-        <button onClick={() => nav(to)}
-          className="flex items-center gap-1 text-purple-600 text-xs font-semibold hover:text-purple-700 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg transition-colors">
-          View all <ChevronRight size={12} />
-        </button>
-      )}
-    </div>
-  )
-}
-
-// ─── Course Card ──────────────────────────────────────────
-function CourseCard({ offering, onClick }) {
-  const colors = [
-    { from: 'from-violet-500', to: 'to-purple-700' },
-    { from: 'from-blue-500',   to: 'to-blue-700' },
-    { from: 'from-emerald-500',to: 'to-emerald-700' },
-    { from: 'from-rose-500',   to: 'to-pink-700' },
-    { from: 'from-amber-500',  to: 'to-orange-600' },
-  ]
-  const c = colors[offering.id % colors.length]
-  const enrolled = offering.enrolled_count || 0
-  const pending  = offering.pending_grading || 0
-
-  return (
-    <div onClick={onClick}
-      className="bg-white rounded-2xl border border-slate-100 overflow-hidden cursor-pointer hover:shadow-md hover:-translate-y-0.5 transition-all group">
-      <div className={`bg-gradient-to-br ${c.from} ${c.to} p-4`}>
-        <div className="flex items-start justify-between">
-          <div className="w-9 h-9 bg-white/20 rounded-xl flex items-center justify-center">
-            <BookOpen size={18} className="text-white" />
-          </div>
-          <span className="text-white/80 text-xs font-mono bg-white/10 px-2 py-0.5 rounded-lg">
-            {offering.course_code || offering.section || 'SEC'}
-          </span>
-        </div>
-        <p className="text-white font-bold text-sm mt-3 line-clamp-2 leading-snug">
-          {offering.course_name || 'Course'}
-        </p>
-      </div>
-      <div className="p-3 flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-slate-500 text-xs">
-          <Users size={12} />
-          <span>{enrolled} students</span>
-        </div>
-        {pending > 0 && (
-          <span className="bg-amber-100 text-amber-700 text-xs font-bold px-2 py-0.5 rounded-full">
-            {pending} pending
-          </span>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Main Dashboard ───────────────────────────────────────
+/* ═══════════════════════════════════════════════════
+   MAIN
+═══════════════════════════════════════════════════ */
 export default function TeacherDashboard() {
   const user     = authStore.getUser()
   const navigate = useNavigate()
 
-  const [offerings, setOfferings]     = useState([])
+  const [offerings,     setOfferings]     = useState([])
   const [announcements, setAnnouncements] = useState([])
-  const [allData, setAllData]         = useState(null)  // aggregated across offerings
-  const [loading, setLoading]         = useState(true)
+  const [allData,       setAllData]       = useState(null)
+  const [loading,       setLoading]       = useState(true)
 
   useEffect(() => {
-    const fetchAll = async () => {
+    ;(async () => {
       try {
         const [offRes, annRes] = await Promise.all([
           teacherAPI.getMyOfferings(),
@@ -182,411 +50,316 @@ export default function TeacherDashboard() {
         ])
         const offs = offRes.data.data?.offerings || []
         setOfferings(offs)
-        setAnnouncements((annRes.data.data?.announcements || []).slice(0, 4))
+        setAnnouncements((annRes.data.data?.announcements || []).slice(0, 5))
 
-        // Fetch per-offering data in parallel (assignments + quizzes + attendance)
         if (offs.length > 0) {
-          const perOffering = await Promise.allSettled(
+          const settled = await Promise.allSettled(
             offs.map(o => Promise.all([
-              teacherAPI.getOfferingAssignments(o.id).catch(() => ({ data: { data: { assignments: [] } } })),
-              teacherAPI.getOfferingQuizzes(o.id).catch(() => ({ data: { data: { quizzes: [] } } })),
-              teacherAPI.getShortAttendance(o.id).catch(() => ({ data: { data: { students: [] } } })),
-              teacherAPI.getOfferingSessions(o.id).catch(() => ({ data: { data: { sessions: [] } } })),
+              teacherAPI.getOfferingAssignments(o.id).catch(() => ({ data:{ data:{ assignments:[] } } })),
+              teacherAPI.getOfferingQuizzes(o.id).catch(()   => ({ data:{ data:{ quizzes:[] }     } })),
+              teacherAPI.getShortAttendance(o.id).catch(()   => ({ data:{ data:{ students:[] }    } })),
+              teacherAPI.getOfferingSessions(o.id).catch(()  => ({ data:{ data:{ sessions:[] }    } })),
             ]))
           )
-
-          let totalAssignments = 0, pendingGrading = 0, totalQuizzes = 0
-          let shortStudents = 0, totalSessions = 0
+          let totalAssignments=0, pendingGrading=0, totalQuizzes=0, shortStudents=0, totalSessions=0
           const offeringDetails = []
-
-          perOffering.forEach((res, i) => {
-            if (res.status === 'fulfilled') {
-              const [aRes, qRes, saRes, sesRes] = res.value
-              const assignments = aRes.data?.data?.assignments || []
-              const quizzes     = qRes.data?.data?.quizzes || []
-              const shortAttn   = saRes.data?.data?.students || []
-              const sessions    = sesRes.data?.data?.sessions || []
-
-              totalAssignments += assignments.length
-              pendingGrading   += assignments.filter(a => a.pending_count > 0).length
-              totalQuizzes     += quizzes.length
-              shortStudents    += shortAttn.length
-              totalSessions    += sessions.length
-
-              offeringDetails.push({
-                id: offs[i].id,
-                name: offs[i].course_name,
-                enrolled: offs[i].enrolled_count || 0,
-                shortCount: shortAttn.length,
-                assignCount: assignments.length,
-                quizCount: quizzes.length,
-                sessionCount: sessions.length,
-              })
-            }
+          settled.forEach((res, i) => {
+            if (res.status !== 'fulfilled') return
+            const [aR, qR, sR, sesR] = res.value
+            const assignments = aR.data?.data?.assignments || []
+            const quizzes     = qR.data?.data?.quizzes     || []
+            const short       = sR.data?.data?.students    || []
+            const sessions    = sesR.data?.data?.sessions  || []
+            totalAssignments += assignments.length
+            pendingGrading   += assignments.filter(a => a.pending_count > 0).length
+            totalQuizzes     += quizzes.length
+            shortStudents    += short.length
+            totalSessions    += sessions.length
+            offeringDetails.push({
+              id: offs[i].id, name: offs[i].course_name,
+              code: offs[i].course_code || '', section: offs[i].section || '',
+              enrolled: offs[i].enrolled_count || 0,
+              shortCount: short.length, sessionCount: sessions.length,
+            })
           })
-
           setAllData({ totalAssignments, pendingGrading, totalQuizzes, shortStudents, totalSessions, offeringDetails })
         }
-      } catch (err) {
-        console.error(err)
-        toast.error('Failed to load dashboard')
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchAll()
+      } catch { toast.error('Failed to load dashboard') }
+      finally { setLoading(false) }
+    })()
   }, [])
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center h-64 gap-3">
-      <Loader2 className="w-8 h-8 text-purple-600 animate-spin" />
-      <p className="text-slate-400 text-sm">Loading your dashboard...</p>
+    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', minHeight:300, gap:'1rem' }}>
+      <Loader2 size={30} style={{ color:'#5b8af0', animation:'spin .8s linear infinite' }} />
+      <p style={{ fontSize:'.82rem', color:'var(--neu-text-ghost)' }}>Loading dashboard…</p>
     </div>
   )
 
-  const firstName       = user?.full_name?.split(' ')[0] || 'Teacher'
-  const totalStudents   = offerings.reduce((s, o) => s + (o.enrolled_count || 0), 0)
-  const totalOfferings  = offerings.length
-  const { totalAssignments = 0, pendingGrading = 0, totalQuizzes = 0,
-          shortStudents = 0, totalSessions = 0, offeringDetails = [] } = allData || {}
+  const firstName     = user?.full_name?.split(' ')[0] || 'Teacher'
+  const totalStudents  = offerings.reduce((s,o) => s + (o.enrolled_count||0), 0)
+  const totalOfferings = offerings.length
+  const {
+    totalAssignments=0, pendingGrading=0, totalQuizzes=0,
+    shortStudents=0, totalSessions=0, offeringDetails=[]
+  } = allData || {}
 
-  const hour = new Date().getHours()
+  const hour     = new Date().getHours()
   const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening'
+  const today    = new Date().toLocaleDateString('en-PK', { weekday:'long', day:'numeric', month:'long' })
 
-  const today = new Date().toLocaleDateString('en-PK', {
-    weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-  })
+  /* shared card wrapper */
+  const cardSty = {
+    background:'var(--neu-surface)', border:'1px solid var(--neu-border)',
+    borderRadius:'1.2rem', padding:'1.2rem',
+    boxShadow:'6px 6px 16px var(--neu-shadow-dark),-3px -3px 10px var(--neu-shadow-light)',
+    minWidth:0,   /* prevent grid blowout */
+    overflow:'hidden',
+  }
 
-  // Bar chart: students per offering
-  const courseBars = offeringDetails.slice(0, 5).map((o, i) => ({
-    v: o.enrolled,
-    l: (o.name || '').slice(0, 4),
-    color: ['#8b5cf6','#3b82f6','#10b981','#f59e0b','#ef4444'][i % 5]
-  }))
-
-  // Attendance short data for bar chart
-  const shortBars = offeringDetails.slice(0, 5).map((o, i) => ({
-    v: o.shortCount,
-    l: (o.name || '').slice(0, 4),
-    color: o.shortCount > 3 ? '#ef4444' : o.shortCount > 0 ? '#f59e0b' : '#10b981'
-  }))
-
-  // Spark trend (simulated based on total sessions)
-  const sessionTrend = [
-    totalSessions * 0.4, totalSessions * 0.55, totalSessions * 0.65,
-    totalSessions * 0.75, totalSessions * 0.85, totalSessions * 0.92, totalSessions
-  ]
+  /* section header */
+  const SH = ({ icon:Icon, title, sub, to }) => (
+    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:'.9rem' }}>
+      <div style={{ display:'flex', alignItems:'center', gap:'.5rem' }}>
+        <div style={{ width:27, height:27, borderRadius:'.55rem', background:'rgba(91,138,240,.1)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+          <Icon size={13} style={{ color:'#5b8af0' }} />
+        </div>
+        <div>
+          <p style={{ fontSize:'.86rem', fontWeight:800, color:'var(--neu-text-primary)', fontFamily:'Outfit,sans-serif', lineHeight:1 }}>{title}</p>
+          {sub && <p style={{ fontSize:'.63rem', color:'var(--neu-text-ghost)', marginTop:2 }}>{sub}</p>}
+        </div>
+      </div>
+      {to && (
+        <button onClick={() => navigate(to)} style={{ display:'flex', alignItems:'center', gap:3, background:'none', border:'none', color:'#5b8af0', fontSize:'.68rem', fontWeight:700, cursor:'pointer', fontFamily:"'DM Sans',sans-serif", whiteSpace:'nowrap' }}>
+          View all<ArrowRight size={11} />
+        </button>
+      )}
+    </div>
+  )
 
   return (
-    <div className="space-y-5 max-w-7xl mx-auto pb-8" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+    /* NO maxWidth, NO overflow — let DashboardLayout handle scrolling */
+    <div style={{ display:'flex', flexDirection:'column', gap:'1.1rem', paddingBottom:'2rem' }}>
 
-      {/* ── Welcome Banner ───────────────────────────────── */}
-      <div className="relative overflow-hidden bg-gradient-to-br from-purple-700 via-violet-700 to-indigo-800 rounded-2xl p-6 text-white">
-        <div className="relative z-10 flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <p className="text-purple-200 text-sm font-medium">{greeting} 👋</p>
-            <h1 className="text-2xl font-black mt-0.5">{firstName}</h1>
-            <p className="text-purple-200 text-xs mt-1 flex items-center gap-1.5">
-              <Calendar size={12} /> {today}
-            </p>
-          </div>
-          <div className="flex gap-3">
-            <button onClick={() => navigate('/teacher/attendance')}
-              className="flex items-center gap-2 bg-white/15 hover:bg-white/25 text-white text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors backdrop-blur-sm border border-white/20">
-              <ClipboardCheck size={14} /> Mark Attendance
-            </button>
-            <button onClick={() => navigate('/teacher/assignments')}
-              className="flex items-center gap-2 bg-white text-purple-700 hover:bg-purple-50 text-xs font-semibold px-4 py-2.5 rounded-xl transition-colors">
-              <FileText size={14} /> Grade Work
-            </button>
-          </div>
+      {/* ── Welcome Row ─────────────────────────────── */}
+      <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', flexWrap:'wrap', gap:'.75rem' }}>
+        <div>
+          <p style={{ fontSize:'.73rem', color:'var(--neu-text-ghost)', marginBottom:'.2rem' }}>{greeting} 👋</p>
+          <h1 style={{ fontSize:'1.55rem', fontWeight:900, color:'var(--neu-text-primary)', fontFamily:'Outfit,sans-serif', letterSpacing:'-.03em', lineHeight:1 }}>{firstName}</h1>
+          <p style={{ fontSize:'.7rem', color:'var(--neu-text-ghost)', marginTop:'.28rem', display:'flex', alignItems:'center', gap:4 }}>
+            <Calendar size={11} style={{ color:'#5b8af0' }} />{today}
+          </p>
         </div>
-        {/* Decorative circles */}
-        <div className="absolute -right-8 -top-8 w-40 h-40 bg-white/5 rounded-full" />
-        <div className="absolute -right-16 top-4 w-48 h-48 bg-white/5 rounded-full" />
-        <div className="absolute right-24 -bottom-12 w-32 h-32 bg-white/5 rounded-full" />
+        <div style={{ display:'flex', gap:'.5rem', flexWrap:'wrap' }}>
+          {[
+            { label:'Mark Attendance', icon:ClipboardCheck, to:'/teacher/attendance', c:'#5b8af0' },
+            { label:'Grade Work',      icon:FileText,        to:'/teacher/assignments', c:'#f59e0b' },
+          ].map(b => (
+            <button key={b.label} onClick={() => navigate(b.to)} style={{
+              display:'flex', alignItems:'center', gap:6, padding:'.5rem .95rem',
+              borderRadius:'.8rem', border:'1px solid var(--neu-border)',
+              background:'var(--neu-surface)',
+              boxShadow:'4px 4px 10px var(--neu-shadow-dark),-2px -2px 6px var(--neu-shadow-light)',
+              color:b.c, fontWeight:700, fontSize:'.76rem', cursor:'pointer',
+              fontFamily:"'DM Sans',sans-serif", transition:'transform .18s',
+            }}
+              onMouseEnter={e => e.currentTarget.style.transform='translateY(-2px)'}
+              onMouseLeave={e => e.currentTarget.style.transform=''}>
+              <b.icon size={13} />{b.label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* ── KPI Cards ────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {/* ── KPI Row — 4 equal columns ───────────────── */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4,minmax(0,1fr))', gap:'.75rem' }}>
         {[
-          {
-            icon: BookOpen, label: 'My Courses', value: totalOfferings,
-            sub: 'This semester', color: 'bg-violet-50 border-violet-100',
-            val: 'text-violet-700', ico: 'bg-violet-100 text-violet-600',
-            to: '/teacher/courses'
-          },
-          {
-            icon: Users, label: 'Total Students', value: totalStudents,
-            sub: 'Across all courses', color: 'bg-blue-50 border-blue-100',
-            val: 'text-blue-700', ico: 'bg-blue-100 text-blue-600',
-            to: '/teacher/courses'
-          },
-          {
-            icon: ClipboardCheck, label: 'Sessions Held', value: totalSessions,
-            sub: 'Lecture sessions', color: 'bg-emerald-50 border-emerald-100',
-            val: 'text-emerald-700', ico: 'bg-emerald-100 text-emerald-600',
-            to: '/teacher/attendance'
-          },
-          {
-            icon: AlertTriangle, label: 'Short Attendance', value: shortStudents,
-            sub: 'Students below 75%', color: shortStudents > 0 ? 'bg-red-50 border-red-100' : 'bg-slate-50 border-slate-100',
-            val: shortStudents > 0 ? 'text-red-600' : 'text-slate-600',
-            ico: shortStudents > 0 ? 'bg-red-100 text-red-500' : 'bg-slate-100 text-slate-400',
-            to: '/teacher/attendance'
-          },
-        ].map(card => {
-          const Ic = card.icon
-          return (
-            <div key={card.label} onClick={() => navigate(card.to)}
-              className={`${card.color} border rounded-2xl p-4 cursor-pointer hover:shadow-sm hover:-translate-y-0.5 transition-all`}>
-              <div className={`w-9 h-9 ${card.ico} rounded-xl flex items-center justify-center mb-3`}>
-                <Ic size={17} />
+          { icon:BookOpen,       label:'My Courses',       value:totalOfferings, sub:'This semester',      accent:'#5b8af0', to:'/teacher/courses'    },
+          { icon:Users,          label:'Total Students',   value:totalStudents,  sub:'Across all courses', accent:'#a78bfa', to:'/teacher/courses'    },
+          { icon:ClipboardCheck, label:'Sessions Held',    value:totalSessions,  sub:'Lecture sessions',   accent:'#34d399', to:'/teacher/attendance' },
+          { icon:AlertTriangle,  label:'Short Attendance', value:shortStudents,  sub:'Below 75%',
+            accent:shortStudents>0?'#ef4444':'#94a3b8', to:'/teacher/attendance', pulse:shortStudents>0 },
+        ].map(k => (
+          <div key={k.label} onClick={() => navigate(k.to)} style={{
+            ...cardSty, cursor:'pointer', transition:'transform .2s',
+            borderLeft:`3px solid ${k.accent}`,
+            display:'flex', flexDirection:'column', gap:'.38rem', padding:'.95rem 1rem',
+          }}
+            onMouseEnter={e => e.currentTarget.style.transform='translateY(-4px)'}
+            onMouseLeave={e => e.currentTarget.style.transform=''}>
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+              <div style={{ width:32, height:32, borderRadius:'.65rem', background:`${k.accent}18`, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                <k.icon size={15} style={{ color:k.accent }} />
               </div>
-              <p className={`text-2xl font-black ${card.val}`}>{card.value}</p>
-              <p className="text-slate-600 text-sm font-semibold mt-0.5">{card.label}</p>
-              <p className="text-slate-400 text-xs mt-0.5">{card.sub}</p>
+              {k.pulse && <span style={{ width:7, height:7, borderRadius:'50%', background:'#ef4444', boxShadow:'0 0 6px #ef4444' }} />}
             </div>
-          )
-        })}
+            <p style={{ fontSize:'1.8rem', fontWeight:900, color:k.accent, fontFamily:'Outfit,sans-serif', lineHeight:1 }}>{k.value}</p>
+            <p style={{ fontSize:'.78rem', fontWeight:700, color:'var(--neu-text-primary)' }}>{k.label}</p>
+            <p style={{ fontSize:'.65rem', color:'var(--neu-text-ghost)' }}>{k.sub}</p>
+          </div>
+        ))}
       </div>
 
-      {/* ── Row 2: Charts ────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* ── Row 2 — 2 equal columns ─────────────────── */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:'.85rem' }}>
 
-        {/* Students per course bar */}
-        <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
-          <SH title="Students per Course" sub="Enrollment distribution" icon={BarChart3} to="/teacher/courses" />
-          {courseBars.length > 0 ? (
-            <>
-              <MiniBarChart bars={courseBars} height={64} />
-              <div className="mt-3 space-y-2">
-                {offeringDetails.slice(0, 3).map((o, i) => (
-                  <HBar key={o.id} label={o.name} value={o.enrolled}
-                    max={Math.max(...offeringDetails.map(x => x.enrolled), 1)}
-                    color={['#8b5cf6','#3b82f6','#10b981'][i % 3]} />
-                ))}
-              </div>
-            </>
-          ) : (
-            <div className="text-center py-8 text-slate-400 text-sm">No courses yet</div>
-          )}
-        </div>
-
-        {/* Session trend sparkline */}
-        <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
-          <SH title="Session Activity" sub="Lectures conducted" icon={Activity} to="/teacher/attendance" />
-          <div className="flex items-end justify-between mb-2">
-            <p className="text-3xl font-black text-slate-800">{totalSessions}</p>
-            <div className="flex items-center gap-1 text-emerald-600 text-xs font-semibold">
-              <ArrowUpRight size={14} /> Active
-            </div>
-          </div>
-          <SparkLine values={sessionTrend} color="#8b5cf6" height={44} />
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div className="bg-purple-50 rounded-xl p-2.5 text-center">
-              <p className="text-lg font-black text-purple-700">{totalAssignments}</p>
-              <p className="text-xs text-slate-500">Assignments</p>
-            </div>
-            <div className="bg-blue-50 rounded-xl p-2.5 text-center">
-              <p className="text-lg font-black text-blue-700">{totalQuizzes}</p>
-              <p className="text-xs text-slate-500">Quizzes</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Short attendance per course */}
-        <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
-          <SH title="Attendance Alerts" sub="Students below 75%" icon={AlertTriangle} to="/teacher/attendance" />
-          {shortStudents === 0 ? (
-            <div className="flex flex-col items-center justify-center py-8">
-              <CheckCircle2 size={36} className="text-emerald-400 mb-2" />
-              <p className="text-emerald-600 font-bold text-sm">All Good!</p>
-              <p className="text-slate-400 text-xs mt-1">No students in shortage</p>
+        {/* My Courses list */}
+        <div style={cardSty}>
+          <SH icon={Layers} title="My Courses" sub={`${totalOfferings} active`} to="/teacher/courses" />
+          {offeringDetails.length === 0 ? (
+            <div style={{ padding:'2.5rem', textAlign:'center' }}>
+              <BookOpen size={26} style={{ color:'var(--neu-text-ghost)', opacity:.15, display:'block', margin:'0 auto .6rem' }} />
+              <p style={{ fontSize:'.78rem', color:'var(--neu-text-secondary)', fontWeight:600 }}>No courses assigned yet</p>
             </div>
           ) : (
-            <>
-              <MiniBarChart bars={shortBars} height={64} />
-              <div className="mt-3 space-y-2">
-                {offeringDetails.filter(o => o.shortCount > 0).slice(0, 4).map(o => (
-                  <div key={o.id} className="flex items-center justify-between py-1.5 border-b border-slate-50 last:border-0">
-                    <p className="text-xs font-semibold text-slate-700 truncate flex-1">{o.name}</p>
-                    <span className={`text-xs font-bold px-2 py-0.5 rounded-full ml-2 flex-shrink-0
-                      ${o.shortCount > 3 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>
-                      {o.shortCount} students
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ── Row 3: My Courses ────────────────────────────── */}
-      <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
-        <SH title="My Courses" sub={`${totalOfferings} active this semester`} icon={Layers} to="/teacher/courses" />
-        {offerings.length === 0 ? (
-          <div className="text-center py-10 text-slate-400">
-            <BookOpen size={32} className="mx-auto mb-2 opacity-30" />
-            <p className="text-sm">No courses assigned yet</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-            {offerings.map(o => (
-              <CourseCard key={o.id} offering={o} onClick={() => navigate('/teacher/courses')} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ── Row 4: Pending Tasks + Announcements ─────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-
-        {/* Pending grading tasks */}
-        <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
-          <SH title="Pending Tasks" sub="Needs your attention" icon={Target} />
-          <div className="space-y-3">
-            {[
-              {
-                icon: FileText, label: 'Assignments to Grade', value: pendingGrading,
-                color: pendingGrading > 0 ? 'text-amber-600' : 'text-emerald-600',
-                bg: pendingGrading > 0 ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-200',
-                icolor: pendingGrading > 0 ? 'bg-amber-100 text-amber-600' : 'bg-emerald-100 text-emerald-600',
-                to: '/teacher/assignments', urgent: pendingGrading > 0
-              },
-              {
-                icon: Users, label: 'Students in Short Attendance', value: shortStudents,
-                color: shortStudents > 0 ? 'text-red-600' : 'text-emerald-600',
-                bg: shortStudents > 0 ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200',
-                icolor: shortStudents > 0 ? 'bg-red-100 text-red-600' : 'bg-emerald-100 text-emerald-600',
-                to: '/teacher/attendance', urgent: shortStudents > 0
-              },
-              {
-                icon: PenSquare, label: 'Active Quizzes', value: totalQuizzes,
-                color: 'text-blue-600',
-                bg: 'bg-blue-50 border-blue-100',
-                icolor: 'bg-blue-100 text-blue-600',
-                to: '/teacher/quizzes', urgent: false
-              },
-            ].map(task => {
-              const Ic = task.icon
-              return (
-                <div key={task.label} onClick={() => navigate(task.to)}
-                  className={`flex items-center gap-3 p-3.5 rounded-xl border cursor-pointer hover:shadow-sm transition-all ${task.bg}`}>
-                  <div className={`w-9 h-9 ${task.icolor} rounded-xl flex items-center justify-center flex-shrink-0`}>
-                    <Ic size={16} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-slate-700 text-sm font-semibold">{task.label}</p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className={`text-xl font-black ${task.color}`}>{task.value}</span>
-                    {task.urgent && task.value > 0 && (
-                      <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                    )}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          {/* Quick action buttons */}
-          <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-2 gap-2">
-            {[
-              { label: 'New Session', icon: ClipboardCheck, to: '/teacher/attendance', color: 'bg-slate-900 text-white' },
-              { label: 'Create Quiz', icon: PenSquare, to: '/teacher/quizzes', color: 'bg-purple-600 text-white' },
-            ].map(btn => {
-              const Ic = btn.icon
-              return (
-                <button key={btn.label} onClick={() => navigate(btn.to)}
-                  className={`flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-colors hover:opacity-90 ${btn.color}`}>
-                  <Ic size={14} /> {btn.label}
-                </button>
-              )
-            })}
-          </div>
-        </div>
-
-        {/* Announcements */}
-        <div className="bg-white rounded-2xl border border-slate-100 p-5 shadow-sm">
-          <SH title="Announcements" sub="Recent notices" icon={Bell} to="/teacher/announcements" />
-          {announcements.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-10 text-slate-400">
-              <Bell size={32} className="mb-2 opacity-30" />
-              <p className="text-sm">No announcements yet</p>
-              <button onClick={() => navigate('/teacher/announcements')}
-                className="mt-3 text-xs text-purple-600 font-semibold hover:underline">
-                Create one →
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {announcements.map(ann => {
-                const pColors = {
-                  urgent: 'bg-red-100 text-red-700',
-                  high:   'bg-orange-100 text-orange-700',
-                  normal: 'bg-blue-100 text-blue-700',
-                  low:    'bg-slate-100 text-slate-500',
-                }
-                const timeAgo = (dateStr) => {
-                  const diff = Date.now() - new Date(dateStr)
-                  const h = Math.floor(diff / 3600000)
-                  const d = Math.floor(diff / 86400000)
-                  return d > 0 ? `${d}d ago` : h > 0 ? `${h}h ago` : 'Just now'
-                }
+            <div style={{ display:'flex', flexDirection:'column', gap:'.12rem' }}>
+              {offeringDetails.map((o, i) => {
+                const accent = COURSE_COLORS[i % COURSE_COLORS.length]
                 return (
-                  <div key={ann.id} className="flex gap-3 py-2.5 border-b border-slate-50 last:border-0">
-                    <div className="w-8 h-8 bg-purple-50 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <Bell size={13} className="text-purple-600" />
+                  <div key={o.id} onClick={() => navigate('/teacher/courses')} style={{
+                    display:'flex', alignItems:'center', gap:'.7rem',
+                    padding:'.58rem .7rem', borderRadius:'.75rem',
+                    border:'1px solid transparent', cursor:'pointer',
+                    transition:'background .14s,border-color .14s,transform .18s',
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.background='var(--neu-surface-deep)'; e.currentTarget.style.borderColor='var(--neu-border)'; e.currentTarget.style.transform='translateX(3px)' }}
+                    onMouseLeave={e => { e.currentTarget.style.background=''; e.currentTarget.style.borderColor='transparent'; e.currentTarget.style.transform='' }}>
+                    <div style={{ width:32, height:32, borderRadius:'.6rem', background:`${accent}18`, border:`1px solid ${accent}28`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                      <span style={{ fontSize:'.68rem', fontWeight:800, color:accent, fontFamily:'Outfit,sans-serif' }}>
+                        {(o.code||o.name||'?').slice(0,3).toUpperCase()}
+                      </span>
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-0.5 flex-wrap">
-                        <p className="text-sm font-semibold text-slate-800 truncate">{ann.title}</p>
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full flex-shrink-0 ${pColors[ann.priority] || pColors.normal}`}>
-                          {ann.priority}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs text-slate-400 line-clamp-1 flex-1">{ann.content}</p>
-                        <span className="text-xs text-slate-300 flex-shrink-0">{timeAgo(ann.created_at)}</span>
-                      </div>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <p style={{ fontSize:'.8rem', fontWeight:700, color:'var(--neu-text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{o.name}</p>
+                      <p style={{ fontSize:'.61rem', color:'var(--neu-text-ghost)', marginTop:1 }}>
+                        Sec {o.section||'—'} · {o.enrolled} students · {o.sessionCount} sessions
+                      </p>
                     </div>
+                    {o.shortCount > 0 && (
+                      <span style={{ fontSize:'.58rem', fontWeight:800, padding:'.13rem .42rem', background:'rgba(239,68,68,.1)', color:'#ef4444', borderRadius:'.33rem', border:'1px solid rgba(239,68,68,.2)', flexShrink:0, whiteSpace:'nowrap' }}>
+                        {o.shortCount} short
+                      </span>
+                    )}
+                    <ChevronRight size={12} style={{ color:'var(--neu-text-ghost)', opacity:.35, flexShrink:0 }} />
                   </div>
                 )
               })}
             </div>
           )}
         </div>
+
+        {/* Pending Tasks */}
+        <div style={cardSty}>
+          <SH icon={ClipboardCheck} title="Pending Tasks" sub="Needs your attention" />
+          <div style={{ display:'flex', flexDirection:'column', gap:'.48rem' }}>
+            {[
+              { icon:FileText,   label:'Assignments to Grade', value:pendingGrading,    to:'/teacher/assignments', accent:pendingGrading>0?'#f59e0b':'#94a3b8',  urgent:pendingGrading>0 },
+              { icon:PenSquare,  label:'Active Quizzes',        value:totalQuizzes,     to:'/teacher/quizzes',     accent:'#a78bfa',                              urgent:false            },
+              { icon:Users,      label:'Short Attendance',      value:shortStudents,    to:'/teacher/attendance',  accent:shortStudents>0?'#ef4444':'#94a3b8',    urgent:shortStudents>0  },
+              { icon:BookMarked, label:'Total Assignments',      value:totalAssignments, to:'/teacher/assignments', accent:'#5b8af0',                              urgent:false            },
+            ].map(t => (
+              <div key={t.label} onClick={() => navigate(t.to)} style={{
+                display:'flex', alignItems:'center', gap:'.65rem', padding:'.58rem .75rem',
+                borderRadius:'.78rem', border:'1px solid var(--neu-border)',
+                background:'var(--neu-surface-deep)',
+                boxShadow:'inset 2px 2px 5px var(--neu-shadow-dark),inset -1px -1px 4px var(--neu-shadow-light)',
+                cursor:'pointer', transition:'transform .16s,box-shadow .16s',
+              }}
+                onMouseEnter={e => { e.currentTarget.style.transform='translateX(3px)'; e.currentTarget.style.boxShadow='3px 3px 8px var(--neu-shadow-dark)' }}
+                onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow='inset 2px 2px 5px var(--neu-shadow-dark),inset -1px -1px 4px var(--neu-shadow-light)' }}>
+                <div style={{ width:29, height:29, borderRadius:'.58rem', background:`${t.accent}15`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <t.icon size={12} style={{ color:t.accent }} />
+                </div>
+                <p style={{ flex:1, fontSize:'.78rem', fontWeight:600, color:'var(--neu-text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{t.label}</p>
+                <div style={{ display:'flex', alignItems:'center', gap:5, flexShrink:0 }}>
+                  <span style={{ fontSize:'1rem', fontWeight:900, color:t.accent, fontFamily:'Outfit,sans-serif' }}>{t.value}</span>
+                  {t.urgent && t.value>0 && <span style={{ width:6, height:6, borderRadius:'50%', background:'#ef4444', boxShadow:'0 0 5px #ef4444' }} />}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'.45rem', marginTop:'.85rem', paddingTop:'.85rem', borderTop:'1px solid var(--neu-border)' }}>
+            {[
+              { label:'New Session', icon:ClipboardCheck, to:'/teacher/attendance', c:'#5b8af0' },
+              { label:'Create Quiz', icon:PenSquare,       to:'/teacher/quizzes',    c:'#a78bfa' },
+            ].map(b => (
+              <button key={b.label} onClick={() => navigate(b.to)} style={{
+                display:'flex', alignItems:'center', justifyContent:'center', gap:5,
+                padding:'.52rem', borderRadius:'.68rem',
+                border:`1px solid ${b.c}30`, background:`${b.c}0f`,
+                color:b.c, fontWeight:700, fontSize:'.73rem', cursor:'pointer',
+                transition:'background .15s', fontFamily:"'DM Sans',sans-serif",
+              }}
+                onMouseEnter={e => e.currentTarget.style.background=`${b.c}1c`}
+                onMouseLeave={e => e.currentTarget.style.background=`${b.c}0f`}>
+                <b.icon size={12} />{b.label}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* ── Quick Actions Bar ────────────────────────────── */}
-      <div className="bg-gradient-to-r from-slate-900 to-violet-950 rounded-2xl p-5">
-        <p className="text-white/70 text-xs font-bold uppercase tracking-wider mb-4 flex items-center gap-2">
-          <Zap size={13} className="text-violet-400" /> Quick Actions
-        </p>
-        <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-          {[
-            { label: 'Mark Attendance', icon: ClipboardCheck, to: '/teacher/attendance', color: 'text-blue-400 bg-blue-400/10' },
-            { label: 'Grade Assignments', icon: FileText, to: '/teacher/assignments', color: 'text-amber-400 bg-amber-400/10' },
-            { label: 'Create Quiz', icon: PenSquare, to: '/teacher/quizzes', color: 'text-violet-400 bg-violet-400/10' },
-            { label: 'Enter Results', icon: BarChart3, to: '/teacher/results', color: 'text-emerald-400 bg-emerald-400/10' },
-            { label: 'Announcement', icon: Bell, to: '/teacher/announcements', color: 'text-pink-400 bg-pink-400/10' },
-            { label: 'Chat', icon: MessageSquare, to: '/teacher/chat', color: 'text-cyan-400 bg-cyan-400/10' },
-          ].map(action => {
-            const Ic = action.icon
+      {/* ── Row 3 — announcements + quick nav ────────── */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(2,minmax(0,1fr))', gap:'.85rem' }}>
+
+        {/* Announcements */}
+        <div style={cardSty}>
+          <SH icon={Bell} title="Announcements" sub="Recent notices" to="/teacher/announcements" />
+          {announcements.length === 0 ? (
+            <div style={{ padding:'2.5rem', textAlign:'center' }}>
+              <Bell size={24} style={{ color:'var(--neu-text-ghost)', opacity:.15, display:'block', margin:'0 auto .6rem' }} />
+              <p style={{ fontSize:'.78rem', color:'var(--neu-text-secondary)', fontWeight:600 }}>No announcements yet</p>
+            </div>
+          ) : announcements.map((ann, idx) => {
+            const pc = PRIORITY_CFG[ann.priority] || PRIORITY_CFG.normal
+            const isLast = idx === announcements.length - 1
             return (
-              <button key={action.label} onClick={() => navigate(action.to)}
-                className="flex flex-col items-center gap-2 p-3 rounded-xl bg-white/5 hover:bg-white/10 transition-colors group">
-                <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${action.color} group-hover:scale-110 transition-transform`}>
-                  <Ic size={16} />
+              <div key={ann.id} style={{ display:'flex', alignItems:'flex-start', gap:'.6rem', padding:'.58rem 0', borderBottom: isLast ? 'none' : '1px solid var(--neu-border)' }}>
+                <div style={{ width:28, height:28, borderRadius:'.52rem', background:pc.bg, border:`1px solid ${pc.c}22`, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, marginTop:2 }}>
+                  <Bell size={11} style={{ color:pc.c }} />
                 </div>
-                <span className="text-white/60 text-xs font-medium group-hover:text-white transition-colors text-center leading-tight">
-                  {action.label}
-                </span>
-              </button>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:3 }}>
+                    <p style={{ fontSize:'.78rem', fontWeight:700, color:'var(--neu-text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', flex:1 }}>{ann.title}</p>
+                    <span style={{ fontSize:'.56rem', fontWeight:800, padding:'.1rem .38rem', borderRadius:'.3rem', background:pc.bg, color:pc.c, flexShrink:0, textTransform:'capitalize' }}>{pc.label}</span>
+                  </div>
+                  <p style={{ fontSize:'.68rem', color:'var(--neu-text-ghost)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{ann.content}</p>
+                </div>
+                <span style={{ fontSize:'.58rem', color:'var(--neu-text-ghost)', flexShrink:0, marginLeft:4, marginTop:3, whiteSpace:'nowrap' }}>{timeAgo(ann.created_at)}</span>
+              </div>
             )
           })}
+        </div>
+
+        {/* Quick Nav — 3×2 grid */}
+        <div style={cardSty}>
+          <SH icon={Layers} title="Quick Navigation" sub="Jump to any section" />
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(3,minmax(0,1fr))', gap:'.5rem' }}>
+            {[
+              { label:'Attendance',  icon:ClipboardCheck, to:'/teacher/attendance',    c:'#5b8af0' },
+              { label:'Assignments', icon:FileText,        to:'/teacher/assignments',   c:'#f59e0b' },
+              { label:'Quizzes',     icon:PenSquare,       to:'/teacher/quizzes',       c:'#a78bfa' },
+              { label:'Results',     icon:BarChart3,       to:'/teacher/results',       c:'#34d399' },
+              { label:'Announce',    icon:Bell,            to:'/teacher/announcements', c:'#f87171' },
+              { label:'Chat',        icon:MessageSquare,   to:'/teacher/chat',          c:'#38bdf8' },
+            ].map(item => (
+              <button key={item.label} onClick={() => navigate(item.to)} style={{
+                display:'flex', flexDirection:'column', alignItems:'center', gap:'.38rem',
+                padding:'.8rem .3rem', borderRadius:'.9rem',
+                border:'1px solid var(--neu-border)', background:'var(--neu-surface)',
+                boxShadow:'4px 4px 10px var(--neu-shadow-dark),-2px -2px 6px var(--neu-shadow-light)',
+                cursor:'pointer', transition:'transform .18s,box-shadow .18s',
+                fontFamily:"'DM Sans',sans-serif",
+              }}
+                onMouseEnter={e => { e.currentTarget.style.transform='translateY(-3px)'; e.currentTarget.style.boxShadow='5px 7px 14px var(--neu-shadow-dark),-2px -2px 6px var(--neu-shadow-light)' }}
+                onMouseLeave={e => { e.currentTarget.style.transform=''; e.currentTarget.style.boxShadow='4px 4px 10px var(--neu-shadow-dark),-2px -2px 6px var(--neu-shadow-light)' }}>
+                <div style={{ width:32, height:32, borderRadius:'.65rem', background:`${item.c}15`, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                  <item.icon size={14} style={{ color:item.c }} />
+                </div>
+                <span style={{ fontSize:'.65rem', fontWeight:700, color:'var(--neu-text-secondary)', textAlign:'center', lineHeight:1.2 }}>{item.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
