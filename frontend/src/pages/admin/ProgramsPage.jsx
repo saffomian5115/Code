@@ -193,36 +193,88 @@ function DeleteModal({ prog, onClose, onConfirm, loading }) {
 }
 
 function ProgCard({ prog, pal, onContextMenu }) {
-  const dc = DEG_COLOR[prog.degree_type] || pal.c
   return (
     <div className="prog-card" onContextMenu={onContextMenu}>
-      <div className="card-ring" style={{ boxShadow: `inset 0 0 0 1.5px ${pal.ring}` }} />
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, borderRadius: '1.25rem 1.25rem 0 0', background: `linear-gradient(90deg,${pal.c},${pal.c}44,transparent)` }} />
+      {/* Top Accent Stripe - Clean indicator like Departments */}
+      <div style={{ 
+        position: 'absolute', top: 0, left: 0, right: 0, height: 4, 
+        background: pal.c, opacity: 0.8 
+      }} />
 
-      {/* top row */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
-        <div style={{ width: 44, height: 44, borderRadius: '.875rem', background: pal.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <GraduationCap size={20} style={{ color: pal.c }} />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+        
+        {/* Header: Department Label & Hint */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Building2 size={12} style={{ color: pal.c }} />
+            <span style={{ 
+              fontSize: '0.7rem', 
+              fontWeight: 800, 
+              color: 'var(--neu-text-ghost)', 
+              textTransform: 'uppercase',
+              letterSpacing: '0.03em'
+            }}>
+              {prog.department_name}
+            </span>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: '.35rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-          {prog.degree_type && <span style={{ fontSize: '.63rem', fontWeight: 800, padding: '.18rem .5rem', background: `${dc}18`, color: dc, borderRadius: '.4rem' }}>{prog.degree_type}</span>}
-          <span style={{ fontSize: '.63rem', fontWeight: 800, padding: '.18rem .5rem', background: pal.bg, color: pal.c, border: `1px solid ${pal.ring}`, borderRadius: '.4rem', fontFamily: 'monospace' }}>{prog.code}</span>
+
+        {/* Program Title - Large & Readable */}
+        <div style={{ marginTop: '0.2rem' }}>
+          <h3 style={{ 
+            fontSize: '1.2rem', 
+            fontWeight: 800, 
+            color: 'var(--neu-text-primary)', 
+            lineHeight: 1.2,
+            fontFamily: 'Outfit, sans-serif'
+          }}>
+            {prog.name}
+          </h3>
+          <div style={{ 
+            marginTop: '4px', 
+            fontSize: '0.75rem', 
+            color: pal.c, 
+            fontWeight: 700 
+          }}>
+            {prog.level || 'Undergraduate'}
+          </div>
+        </div>
+
+        {/* Info Row: Using the clean inset style from Departments */}
+        <div style={{ 
+          display: 'grid', 
+          gridTemplateColumns: '1fr 1fr', 
+          gap: '1rem',
+          marginTop: '0.5rem', 
+          paddingTop: '1rem',
+          borderTop: '1px solid var(--neu-border)'
+        }}>
+          {/* Duration */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div >
+              <Clock size={20} style={{ color: pal.c }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: '0.8rem', color: 'var(--neu-text-primary)', fontWeight: 700 }}>
+                {prog.duration_years} Years
+              </span>
+            </div>
+          </div>
+
+          {/* Semesters */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div>
+              <Hash size={20} style={{ color: pal.c }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: '0.65rem', color: 'var(--neu-text-ghost)' }}></span>
+              <span style={{ fontSize: '0.8rem', color: 'var(--neu-text-primary)', fontWeight: 700 }}>
+                {prog.total_semesters} Sem
+              </span>
+            </div>
+          </div>
         </div>
       </div>
-
-      <h3 style={{ fontSize: '.93rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', lineHeight: 1.3, marginBottom: '.25rem' }}>{prog.name}</h3>
-      {prog.department_name && (
-        <p style={{ fontSize: '.72rem', color: 'var(--neu-text-ghost)', marginBottom: '.8rem', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
-          <Building2 size={10} />{prog.department_name}
-        </p>
-      )}
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '.8rem', paddingTop: '.7rem', borderTop: '1px solid var(--neu-border)' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '.3rem', fontSize: '.71rem', color: 'var(--neu-text-muted)', fontWeight: 500 }}><Clock size={11} style={{ color: 'var(--neu-text-ghost)' }} />{prog.duration_years || 4} yr</span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '.3rem', fontSize: '.71rem', color: 'var(--neu-text-muted)', fontWeight: 500 }}><Hash size={11} style={{ color: 'var(--neu-text-ghost)' }} />{prog.total_credit_hours || '—'} cr</span>
-        <span style={{ marginLeft: 'auto', fontSize: '.71rem', color: 'var(--neu-text-muted)', fontWeight: 500 }}>{prog.total_students || 0} students</span>
-      </div>
-      <span style={{ position: 'absolute', bottom: '.5rem', right: '.7rem', fontSize: '.58rem', color: 'var(--neu-text-ghost)', opacity: .4, pointerEvents: 'none' }}>⊞ right-click</span>
     </div>
   )
 }

@@ -218,50 +218,92 @@ function DeleteModal({ dept, onClose, onConfirm, loading }) {
   )
 }
 
-/* ─── Dept Card ──────────────────────────────────── */
+/* ─── Updated Dept Card ──────────────────────────────────── */
 function DeptCard({ dept, pal, onContextMenu }) {
   return (
     <div className="dept-card" onContextMenu={onContextMenu}>
-      {/* Hover accent ring — CSS opacity transition via .dept-card:hover */}
+      {/* Hover accent ring */}
       <div className="card-accent-border" style={{ boxShadow: `inset 0 0 0 1.5px ${pal.ring}` }} />
 
-      {/* Top colour stripe */}
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, borderRadius: '1.25rem 1.25rem 0 0', background: `linear-gradient(90deg, ${pal.c}, ${pal.c}44, transparent)` }} />
+      {/* Top accent stripe - subtle indicator */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: pal.c, opacity: 0.8 }} />
 
-      {/* Icon row */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1rem' }}>
-        <div style={{ width: 44, height: 44, borderRadius: '.875rem', background: pal.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <Building2 size={20} style={{ color: pal.c }} />
-        </div>
-        <span style={{ fontSize: '.65rem', fontWeight: 800, padding: '.2rem .6rem', background: pal.bg, color: pal.c, border: `1px solid ${pal.ring}`, borderRadius: '.45rem', fontFamily: 'monospace', letterSpacing: '.05em' }}>
-          {dept.code}
-        </span>
-      </div>
-
-      {/* Name */}
-      <h3 style={{ fontSize: '.95rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', lineHeight: 1.3, marginBottom: '.3rem' }}>
-        {dept.name}
-      </h3>
-
-      {/* Description */}
-      {dept.description
-        ? <p style={{ fontSize: '.75rem', color: 'var(--neu-text-ghost)', lineHeight: 1.55, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: '.9rem' }}>{dept.description}</p>
-        : <div style={{ marginBottom: '.9rem' }} />
-      }
-
-      {/* Footer stats */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '.8rem', paddingTop: '.75rem', borderTop: '1px solid var(--neu-border)' }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: '.3rem', fontSize: '.72rem', color: 'var(--neu-text-muted)', fontWeight: 500 }}>
-          <BookOpen size={11} style={{ color: 'var(--neu-text-ghost)' }} />
-          {dept.total_programs || 0} programs
-        </span>
-        {dept.hod_name && (
-          <span style={{ display: 'flex', alignItems: 'center', gap: '.3rem', fontSize: '.72rem', color: 'var(--neu-text-muted)', fontWeight: 500, flex: 1, minWidth: 0, overflow: 'hidden' }}>
-            <User size={11} style={{ color: 'var(--neu-text-ghost)', flexShrink: 0 }} />
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dept.hod_name}</span>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+        
+        {/* Header: Code Badge & Counter */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{ 
+            fontSize: '0.75rem', 
+            fontWeight: 800, 
+            padding: '0.25rem 0.75rem', 
+            background: 'var(--neu-surface-deep)', 
+            color: pal.c, 
+            borderRadius: '0.5rem', 
+            boxShadow: 'inset 2px 2px 4px var(--neu-shadow-dark), inset -1px -1px 3px var(--neu-shadow-light)',
+            fontFamily: 'monospace',
+            letterSpacing: '0.05em'
+          }}>
+            {dept.code}
           </span>
-        )}
-        <span style={{ fontSize: '.6rem', color: 'var(--neu-text-ghost)', opacity: .45, marginLeft: 'auto', flexShrink: 0 }}>⊞ right-click</span>
+          
+        </div>
+
+        {/* Main Info: Department Name */}
+        <div style={{ marginTop: '0.25rem' }}>
+          <h3 style={{ 
+            fontSize: '1.1rem', 
+            fontWeight: 800, 
+            color: 'var(--neu-text-primary)', 
+            fontFamily: 'Outfit, sans-serif', 
+            lineHeight: 1.2,
+            marginBottom: '0.4rem'
+          }}>
+            {dept.name}
+          </h3>
+          
+          {dept.description ? (
+            <p style={{ 
+              fontSize: '0.8rem', 
+              color: 'var(--neu-text-secondary)', // Improved contrast from ghost to secondary
+              lineHeight: 1.5, 
+              display: '-webkit-box', 
+              WebkitLineClamp: 2, 
+              WebkitBoxOrient: 'vertical', 
+              overflow: 'hidden',
+              minHeight: '2.4rem'
+            }}>
+              {dept.description}
+            </p>
+          ) : (
+            <div style={{ minHeight: '2.4rem' }} />
+          )}
+        </div>
+
+        {/* Footer: Meta Info with better icons and contrast */}
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '0.5rem', 
+          paddingTop: '0.8rem', 
+          borderTop: '1px solid var(--neu-border)',
+          marginTop: '0.4rem'
+        }}>
+          {/* HOD Info */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <User size={13} style={{ color: pal.c }} />
+            <span style={{ fontSize: '0.75rem', color: 'var(--neu-text-primary)', fontWeight: 600 }}>
+              {dept.hod_name || 'No HOD assigned'}
+            </span>
+          </div>
+
+          {/* Programs Count */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <BookOpen size={13} style={{ color: pal.c }} />
+            <span style={{ fontSize: '0.75rem', color: 'var(--neu-text-secondary)' }}>
+              {dept.total_programs || 0} Programs
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   )
