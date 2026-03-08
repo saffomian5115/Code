@@ -1,297 +1,338 @@
+// ═══════════════════════════════════════════════════════════════
+//  AssignmentsPage.jsx  —  Neumorphic + Right-click Context Menu
+//  Replace: frontend/src/pages/teacher/AssignmentsPage.jsx
+// ═══════════════════════════════════════════════════════════════
+
 import { useState, useEffect, useCallback } from 'react'
+import {
+  Plus, FileText, Eye, Trash2, Loader2,
+  Calendar, Users, Award, Upload, X, Clock,
+  AlertCircle, CheckCircle, BookOpen,
+} from 'lucide-react'
+import toast from 'react-hot-toast'
 import { useSearchParams } from 'react-router-dom'
 import { teacherAPI } from '../../api/teacher.api'
-import { formatDate, formatDateTime } from '../../utils/helpers'
-import toast from 'react-hot-toast'
-import {
-  Plus, FileText, Eye, Award, Loader2, X,
-  CheckCircle2, Clock, AlertTriangle, ChevronRight,
-  Download, BookOpen, Users
-} from 'lucide-react'
+import { useContextMenu, ContextMenu } from '../../hooks/useContextMenu'
 
-const STATUS_CFG = {
-  submitted: { cls: 'bg-blue-100 text-blue-700',    label: 'Submitted' },
-  graded:    { cls: 'bg-emerald-100 text-emerald-700', label: 'Graded' },
-  late:      { cls: 'bg-orange-100 text-orange-700', label: 'Late' },
-  missing:   { cls: 'bg-red-100 text-red-700',      label: 'Missing' },
+// ── Shared styles ─────────────────────────────────────────────
+const neu = (extra = {}) => ({
+  background: 'var(--neu-surface)',
+  boxShadow: 'var(--neu-raised)',
+  border: '1px solid var(--neu-border)',
+  borderRadius: '1.25rem',
+  ...extra,
+})
+
+const inputStyle = {
+  width: '100%',
+  background: 'var(--neu-surface-deep)',
+  boxShadow: 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)',
+  border: '1px solid var(--neu-border)',
+  borderRadius: '0.75rem',
+  padding: '0.6rem 0.9rem',
+  fontSize: '0.85rem',
+  color: 'var(--neu-text-primary)',
+  outline: 'none',
+  fontFamily: "'DM Sans', sans-serif",
+  boxSizing: 'border-box',
 }
 
-// ── Create Assignment Modal ────────────────────────
-function CreateAssignmentModal({ offeringId, onClose, onSuccess }) {
-  const [form, setForm] = useState({
-    title: '', description: '', total_marks: 10,
-    due_date: '', instructions: '', file_required: true,
-    allow_late: false, late_penalty_percent: 20,
-  })
-  const [loading, setLoading] = useState(false)
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+const thStyle = {
+  textAlign: 'left', padding: '0.7rem 1rem',
+  fontSize: '0.68rem', fontWeight: 700,
+  color: 'var(--neu-text-ghost)',
+  textTransform: 'uppercase', letterSpacing: '0.06em',
+  borderBottom: '1px solid var(--neu-border)',
+  whiteSpace: 'nowrap',
+}
 
-  const handleSubmit = async () => {
-    // Basic validation
-    if (!form.title.trim()) { toast.error('Title is required'); return }
-    if (!form.due_date) { toast.error('Due date is required'); return }
-    setLoading(true)
-    try {
-      const submissionData = {
-        ...form,
-        offering_id: parseInt(offeringId),
-        total_marks: parseInt(form.total_marks)
-      }
-      await teacherAPI.createAssignment(offeringId, submissionData)
-      toast.success('Assignment created successfully')
-      onSuccess(); onClose()
-    } catch (err) { 
-      console.error("Assignment create error:", err)
-      toast.error(err.response?.data?.message || 'Failed to create assignment') 
-    }
-    finally { setLoading(false) }
-  }
+const tdStyle = {
+  padding: '0.75rem 1rem',
+  fontSize: '0.82rem',
+  color: 'var(--neu-text-secondary)',
+  borderBottom: '1px solid var(--neu-border-inner)',
+}
 
-  const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:border-blue-400 transition-all"
+const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
+const isOverdue = (d) => d && new Date(d) < new Date()
 
+function Field({ label, children }) {
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl max-h-[90vh] flex flex-col">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <h3 className="font-display font-bold text-lg text-slate-800">Create Assignment</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl"><X size={18} className="text-slate-500" /></button>
-        </div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          <div>
-            <label className="block text-xs text-slate-500 font-medium mb-1.5">Assignment Title *</label>
-            <input className={inputCls} value={form.title} onChange={e => set('title', e.target.value)} placeholder="Assignment 1: Data Types" />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 font-medium mb-1.5">Description</label>
-            <textarea className={inputCls} rows={3} value={form.description} onChange={e => set('description', e.target.value)} placeholder="Brief assignment description..." />
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 font-medium mb-1.5">Instructions</label>
-            <textarea className={inputCls} rows={3} value={form.instructions} onChange={e => set('instructions', e.target.value)} placeholder="Detailed instructions for students..." />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-slate-500 font-medium mb-1.5">Total Marks</label>
-              <input className={inputCls} type="number" min={1} value={form.total_marks} onChange={e => set('total_marks', parseInt(e.target.value))} />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 font-medium mb-1.5">Due Date *</label>
-              <input className={inputCls} type="datetime-local" value={form.due_date} onChange={e => set('due_date', e.target.value)} />
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={form.file_required} onChange={e => set('file_required', e.target.checked)} className="w-4 h-4 rounded text-blue-600" />
-              <span className="text-sm text-slate-600">File upload required</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={form.allow_late} onChange={e => set('allow_late', e.target.checked)} className="w-4 h-4 rounded text-blue-600" />
-              <span className="text-sm text-slate-600">Allow late submissions</span>
-            </label>
-          </div>
-          {form.allow_late && (
-            <div>
-              <label className="block text-xs text-slate-500 font-medium mb-1.5">Late Penalty (%)</label>
-              <input className={inputCls} type="number" min={0} max={100} value={form.late_penalty_percent} onChange={e => set('late_penalty_percent', parseInt(e.target.value))} />
-            </div>
-          )}
-        </div>
-        <div className="p-6 pt-0 flex gap-3">
-          <button onClick={onClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium rounded-xl transition-colors">Cancel</button>
-          <button onClick={handleSubmit} disabled={loading}
-            className="flex-1 py-2.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2">
-            {loading ? <><Loader2 size={16} className="animate-spin" /> Creating...</> : 'Create Assignment'}
-          </button>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+      <label style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--neu-text-ghost)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{label}</label>
+      {children}
+    </div>
+  )
+}
+
+function NeuBtn({ onClick, disabled, loading: isLoading, accent = '#5b8af0', children, style = {} }) {
+  return (
+    <button onClick={onClick} disabled={disabled || isLoading}
+      style={{
+        display: 'flex', alignItems: 'center', gap: '0.45rem',
+        padding: '0.6rem 1.2rem', borderRadius: '0.875rem', border: 'none',
+        background: `linear-gradient(145deg, ${accent}ee, ${accent}bb)`,
+        boxShadow: `4px 4px 12px var(--neu-shadow-dark), -2px -2px 6px var(--neu-shadow-light)`,
+        color: '#fff', fontSize: '0.8rem', fontWeight: 700,
+        fontFamily: "'DM Sans', sans-serif",
+        cursor: disabled || isLoading ? 'not-allowed' : 'pointer',
+        opacity: disabled || isLoading ? 0.6 : 1,
+        transition: 'transform 0.14s',
+        ...style,
+      }}
+      onMouseEnter={e => { if (!disabled) e.currentTarget.style.transform = 'translateY(-1px)' }}
+      onMouseLeave={e => { e.currentTarget.style.transform = '' }}
+    >
+      {isLoading && <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} />}
+      {children}
+    </button>
+  )
+}
+
+function Modal({ children, onClose, wide }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,14,22,0.6)', backdropFilter: 'blur(8px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+      <div style={{ ...neu({ borderRadius: '1.5rem' }), width: '100%', maxWidth: wide ? 780 : 520, maxHeight: '90vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', boxShadow: 'var(--neu-raised-lg)' }}>
+        {children}
       </div>
     </div>
   )
 }
 
-// ── Grade Submission Modal ─────────────────────────
-function GradeModal({ submission, totalMarks, onClose, onSuccess }) {
-  const [form, setForm] = useState({
-    obtained_marks: submission.obtained_marks || '',
-    feedback: submission.feedback || '',
-    status: 'graded',
-  })
+// ── Create Assignment Modal ───────────────────────────────────
+function CreateModal({ offeringId, onClose, onSuccess }) {
+  const [form, setForm] = useState({ title: '', description: '', due_date: '', total_marks: 100, allow_late: false })
   const [loading, setLoading] = useState(false)
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
-  const percentage = form.obtained_marks && totalMarks
-    ? ((form.obtained_marks / totalMarks) * 100).toFixed(1)
-    : null
-
   const handleSubmit = async () => {
-    if (form.obtained_marks === '') { toast.error('Marks are required'); return }
-    if (parseFloat(form.obtained_marks) > totalMarks) { toast.error(`Marks cannot exceed ${totalMarks}`); return }
+    if (!form.title.trim() || !form.due_date) { toast.error('Title and due date required'); return }
     setLoading(true)
     try {
-      await teacherAPI.gradeSubmission(submission.id, {
-        obtained_marks: parseFloat(form.obtained_marks),
-        feedback: form.feedback,
-        status: form.status,
-      })
-      toast.success('Submission graded successfully')
-      onSuccess(); onClose()
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed') }
-    finally { setLoading(false) }
+      await teacherAPI.createAssignment(offeringId, form)
+      toast.success('Assignment created!'); onSuccess(); onClose()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to create assignment')
+    } finally { setLoading(false) }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <div>
-            <h3 className="font-display font-bold text-lg text-slate-800">Grade Submission</h3>
-            <p className="text-slate-400 text-sm">{submission.full_name}</p>
-          </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl"><X size={18} className="text-slate-500" /></button>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="p-3 bg-slate-50 rounded-xl flex items-center justify-between text-sm">
-            <span className="text-slate-500">Submitted:</span>
-            <span className="text-slate-700 font-medium">{formatDateTime(submission.submission_date)}</span>
-          </div>
-          {submission.plagiarism_percentage > 0 && (
-            <div className={`p-3 rounded-xl flex items-center gap-2 ${submission.plagiarism_percentage > 30 ? 'bg-red-50 border border-red-200' : 'bg-orange-50 border border-orange-200'}`}>
-              <AlertTriangle size={14} className={submission.plagiarism_percentage > 30 ? 'text-red-500' : 'text-orange-500'} />
-              <span className="text-xs font-medium text-slate-700">Plagiarism: {submission.plagiarism_percentage}%</span>
-            </div>
-          )}
-          <div>
-            <label className="block text-xs text-slate-500 font-medium mb-1.5">Obtained Marks * (out of {totalMarks})</label>
-            <input
-              type="number" min={0} max={totalMarks} step={0.5}
-              value={form.obtained_marks}
-              onChange={e => set('obtained_marks', e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"
-              placeholder={`0 – ${totalMarks}`}
-            />
-            {percentage !== null && (
-              <p className="text-xs text-slate-400 mt-1">= {percentage}%</p>
-            )}
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 font-medium mb-1.5">Feedback</label>
-            <textarea
-              rows={3} value={form.feedback} onChange={e => set('feedback', e.target.value)}
-              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm resize-none focus:outline-none focus:border-blue-400"
-              placeholder="Write feedback for the student..."
-            />
-          </div>
-        </div>
-        <div className="p-6 pt-0 flex gap-3">
-          <button onClick={onClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium rounded-xl transition-colors">Cancel</button>
-          <button onClick={handleSubmit} disabled={loading}
-            className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2">
-            {loading ? <><Loader2 size={16} className="animate-spin" /> Saving...</> : <><Award size={15} /> Save Grade</>}
-          </button>
-        </div>
+    <Modal onClose={onClose}>
+      <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>New Assignment</h2>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neu-text-ghost)' }}><X size={18} /></button>
       </div>
-    </div>
+      <div style={{ padding: '1.25rem 1.5rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+        <Field label="Title *"><input value={form.title} onChange={e => set('title', e.target.value)} style={inputStyle} placeholder="Assignment title" /></Field>
+        <Field label="Description">
+          <textarea value={form.description} onChange={e => set('description', e.target.value)} rows={3}
+            style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }} placeholder="Assignment details..." />
+        </Field>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+          <Field label="Due Date *"><input type="datetime-local" value={form.due_date} onChange={e => set('due_date', e.target.value)} style={inputStyle} /></Field>
+          <Field label="Total Marks"><input type="number" value={form.total_marks} onChange={e => set('total_marks', e.target.value)} style={inputStyle} min={1} /></Field>
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--neu-text-secondary)' }}>
+          <input type="checkbox" checked={form.allow_late} onChange={e => set('allow_late', e.target.checked)} />
+          Allow late submissions
+        </label>
+      </div>
+      <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--neu-border)', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+        <button onClick={onClose} style={{ ...inputStyle, width: 'auto', padding: '0.6rem 1.1rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem' }}>Cancel</button>
+        <NeuBtn onClick={handleSubmit} loading={loading}><Plus size={14} /> Create</NeuBtn>
+      </div>
+    </Modal>
   )
 }
 
-// ── Submissions Panel ──────────────────────────────
-function SubmissionsPanel({ assignment, onClose, onRefresh }) {
+// ── Submissions Modal ─────────────────────────────────────────
+function SubmissionsModal({ assignment, onClose, onRefresh }) {
   const [submissions, setSubmissions] = useState([])
   const [loading, setLoading] = useState(true)
   const [gradeModal, setGradeModal] = useState(null)
 
   const loadSubmissions = useCallback(async () => {
     setLoading(true)
-    try {
-      const res = await teacherAPI.getAssignmentSubmissions(assignment.id)
-      setSubmissions(res.data.data?.submissions || [])
-    } catch { toast.error('Failed to load submissions') }
+    try { const res = await teacherAPI.getAssignmentSubmissions(assignment.id); setSubmissions(res.data.data?.submissions || []) }
+    catch { toast.error('Failed to load submissions') }
     finally { setLoading(false) }
   }, [assignment.id])
 
   useEffect(() => { loadSubmissions() }, [])
 
-  const stats = {
-    total: submissions.length,
-    graded: submissions.filter(s => s.status === 'graded').length,
-    pending: submissions.filter(s => s.status === 'submitted' || s.status === 'late').length,
-  }
-
   return (
-    <div className="bg-white rounded-2xl border border-slate-200">
-      <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+    <Modal onClose={onClose} wide>
+      <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
-          <h3 className="font-display font-bold text-slate-800">{assignment.title} — Submissions</h3>
-          <p className="text-slate-400 text-sm">
-            {stats.graded}/{stats.total} graded · {stats.pending} pending
-          </p>
+          <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>{assignment.title}</h2>
+          <p style={{ fontSize: '0.75rem', color: 'var(--neu-text-ghost)', marginTop: '0.15rem' }}>{submissions.length} submissions · {assignment.total_marks} marks</p>
         </div>
-        <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl"><X size={18} className="text-slate-500" /></button>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neu-text-ghost)' }}><X size={18} /></button>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-slate-100">
-              {['Student', 'Roll No', 'Submitted', 'Status', 'Marks', 'Plagiarism', 'Action'].map(h => (
-                <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {loading ? (
-              Array.from({ length: 4 }).map((_, i) => (
-                <tr key={i} className="animate-pulse">{Array.from({length:7}).map((_,j) => (
-                  <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 rounded-lg" /></td>
-                ))}</tr>
-              ))
-            ) : submissions.length === 0 ? (
-              <tr><td colSpan={7} className="text-center py-12 text-slate-400">No submissions yet</td></tr>
-            ) : (
-              submissions.map(s => {
-                const sc = STATUS_CFG[s.status] || STATUS_CFG.submitted
-                return (
-                  <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-4 py-3 font-medium text-slate-700">{s.full_name}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-400">{s.roll_number}</td>
-                    <td className="px-4 py-3 text-xs text-slate-500">{formatDateTime(s.submission_date)}</td>
-                    <td className="px-4 py-3">
-                      <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold ${sc.cls}`}>{sc.label}</span>
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {loading ? (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '2.5rem' }}><Loader2 size={24} style={{ color: '#5b8af0', animation: 'spin 0.8s linear infinite' }} /></div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  {['Student', 'Roll No', 'Submitted At', 'Status', 'Marks', 'Plagiarism', 'Action'].map(h => (
+                    <th key={h} style={thStyle}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {submissions.length === 0 ? (
+                  <tr><td colSpan={7} style={{ ...tdStyle, textAlign: 'center', padding: '2.5rem', color: 'var(--neu-text-ghost)' }}>No submissions yet</td></tr>
+                ) : submissions.map(s => (
+                  <tr key={s.id}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--neu-surface-deep)'}
+                    onMouseLeave={e => e.currentTarget.style.background = ''}
+                    style={{ transition: 'background 0.12s' }}
+                  >
+                    <td style={{ ...tdStyle, fontWeight: 600, color: 'var(--neu-text-primary)' }}>{s.student_name}</td>
+                    <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '0.75rem' }}>{s.roll_number}</td>
+                    <td style={{ ...tdStyle, fontSize: '0.75rem' }}>{formatDate(s.submitted_at)}</td>
+                    <td style={tdStyle}>
+                      <span style={{ background: s.is_late ? 'rgba(245,166,35,0.12)' : 'rgba(62,207,142,0.12)', color: s.is_late ? '#f5a623' : '#3ecf8e', fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.55rem', borderRadius: '0.4rem' }}>
+                        {s.is_late ? 'Late' : 'On time'}
+                      </span>
                     </td>
-                    <td className="px-4 py-3">
-                      {s.obtained_marks != null
-                        ? <span className="font-semibold text-slate-700">{s.obtained_marks}/{assignment.total_marks}</span>
-                        : <span className="text-slate-400">—</span>}
+                    <td style={tdStyle}>
+                      {s.status === 'graded'
+                        ? <span style={{ fontWeight: 800, color: 'var(--neu-text-primary)' }}>{s.marks_obtained}/{assignment.total_marks}</span>
+                        : <span style={{ color: 'var(--neu-text-ghost)' }}>—</span>}
                     </td>
-                    <td className="px-4 py-3">
-                      {s.plagiarism_percentage > 0
-                        ? <span className={`text-xs font-bold ${s.plagiarism_percentage > 30 ? 'text-red-600' : 'text-orange-500'}`}>{s.plagiarism_percentage}%</span>
-                        : <span className="text-slate-400 text-xs">—</span>}
+                    <td style={tdStyle}>
+                      {s.plagiarism_percentage != null
+                        ? <span style={{ fontWeight: 700, color: s.plagiarism_percentage > 30 ? '#f26b6b' : '#f5a623', fontSize: '0.8rem' }}>{s.plagiarism_percentage}%</span>
+                        : <span style={{ color: 'var(--neu-text-ghost)' }}>—</span>}
                     </td>
-                    <td className="px-4 py-3">
+                    <td style={tdStyle}>
                       <button onClick={() => setGradeModal(s)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-100 hover:bg-purple-200 text-purple-700 rounded-xl text-xs font-semibold transition-colors">
+                        style={{
+                          display: 'flex', alignItems: 'center', gap: '0.35rem',
+                          padding: '0.4rem 0.8rem', borderRadius: '0.6rem', border: 'none',
+                          background: 'rgba(167,139,250,0.12)', color: '#a78bfa',
+                          fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer',
+                          fontFamily: "'DM Sans', sans-serif",
+                        }}>
                         <Award size={12} /> {s.status === 'graded' ? 'Update' : 'Grade'}
                       </button>
                     </td>
                   </tr>
-                )
-              })
-            )}
-          </tbody>
-        </table>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
-      {gradeModal && (
-        <GradeModal
-          submission={gradeModal}
-          totalMarks={assignment.total_marks}
-          onClose={() => setGradeModal(null)}
-          onSuccess={() => { loadSubmissions(); onRefresh() }}
-        />
-      )}
+      {gradeModal && <GradeModal submission={gradeModal} totalMarks={assignment.total_marks} onClose={() => setGradeModal(null)} onSuccess={() => { loadSubmissions(); onRefresh() }} />}
+    </Modal>
+  )
+}
+
+// ── Grade Modal ───────────────────────────────────────────────
+function GradeModal({ submission, totalMarks, onClose, onSuccess }) {
+  const [marks, setMarks] = useState(submission.marks_obtained || '')
+  const [feedback, setFeedback] = useState(submission.feedback || '')
+  const [loading, setLoading] = useState(false)
+
+  const handleGrade = async () => {
+    if (marks === '' || isNaN(marks)) { toast.error('Enter valid marks'); return }
+    setLoading(true)
+    try {
+      await teacherAPI.gradeSubmission(submission.id, { marks_obtained: parseFloat(marks), feedback })
+      toast.success('Graded!'); onSuccess(); onClose()
+    } catch { toast.error('Failed to grade') }
+    finally { setLoading(false) }
+  }
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,14,22,0.7)', backdropFilter: 'blur(8px)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+      <div style={{ ...neu({ borderRadius: '1.5rem' }), width: '100%', maxWidth: 400 }}>
+        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>Grade: {submission.student_name}</h3>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neu-text-ghost)' }}><X size={18} /></button>
+        </div>
+        <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+          <Field label={`Marks (out of ${totalMarks})`}>
+            <input type="number" value={marks} onChange={e => setMarks(e.target.value)} min={0} max={totalMarks} style={inputStyle} />
+          </Field>
+          <Field label="Feedback">
+            <textarea value={feedback} onChange={e => setFeedback(e.target.value)} rows={3} style={{ ...inputStyle, resize: 'vertical' }} placeholder="Feedback for student..." />
+          </Field>
+        </div>
+        <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--neu-border)', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+          <button onClick={onClose} style={{ ...inputStyle, width: 'auto', padding: '0.6rem 1.1rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem' }}>Cancel</button>
+          <NeuBtn onClick={handleGrade} loading={loading} accent='#a78bfa'><Award size={14} /> Save Grade</NeuBtn>
+        </div>
+      </div>
     </div>
   )
 }
 
-// ── Main Page ──────────────────────────────────────
+// ── Assignment Group (upcoming / overdue) ─────────────────────
+function AssignmentGroup({ title, icon: Icon, color, bg, assignments, onRightClick, onViewSubmissions }) {
+  if (assignments.length === 0) return null
+  return (
+    <div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+        <Icon size={14} style={{ color }} />
+        <span style={{ fontSize: '0.78rem', fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{title} ({assignments.length})</span>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+        {assignments.map(a => (
+          <div key={a.id}
+            onContextMenu={e => onRightClick(e, a)}
+            style={{
+              ...neu({ borderRadius: '0.875rem', padding: '0.9rem 1.1rem' }),
+              display: 'flex', alignItems: 'center', gap: '1rem', cursor: 'context-menu',
+              transition: 'transform 0.15s, box-shadow 0.15s', position: 'relative',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.transform = 'translateX(3px)'; e.currentTarget.style.boxShadow = '10px 10px 24px var(--neu-shadow-dark), -6px -6px 14px var(--neu-shadow-light)' }}
+            onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = 'var(--neu-raised)' }}
+          >
+            <div style={{ width: 36, height: 36, borderRadius: '0.65rem', background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: 'inset 2px 2px 4px var(--neu-shadow-dark), inset -1px -1px 3px var(--neu-shadow-light)' }}>
+              <FileText size={16} style={{ color }} />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <p style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>{a.title}</p>
+              <p style={{ fontSize: '0.72rem', color: 'var(--neu-text-ghost)', display: 'flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.15rem' }}>
+                <Calendar size={11} />Due: {formatDate(a.due_date)} · {a.total_marks} marks
+              </p>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
+              <span style={{ background: 'rgba(91,138,240,0.1)', color: '#5b8af0', fontSize: '0.72rem', fontWeight: 700, padding: '0.25rem 0.6rem', borderRadius: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                <Upload size={11} /> {a.submission_count || 0}
+              </span>
+              {a.pending_count > 0 && (
+                <span style={{ background: 'rgba(245,166,35,0.12)', color: '#f5a623', fontSize: '0.72rem', fontWeight: 700, padding: '0.25rem 0.6rem', borderRadius: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <Clock size={11} /> {a.pending_count} pending
+                </span>
+              )}
+              <button onClick={() => onViewSubmissions(a)}
+                style={{
+                  padding: '0.4rem 0.8rem', borderRadius: '0.6rem', border: 'none',
+                  background: 'var(--neu-surface-deep)', color: 'var(--neu-text-secondary)',
+                  fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer',
+                  boxShadow: '3px 3px 7px var(--neu-shadow-dark), -1px -1px 4px var(--neu-shadow-light)',
+                  display: 'flex', alignItems: 'center', gap: '0.35rem',
+                  fontFamily: "'DM Sans', sans-serif",
+                }}>
+                <Eye size={12} /> Submissions
+              </button>
+            </div>
+            <span style={{ position: 'absolute', bottom: '0.4rem', right: '0.6rem', fontSize: '0.55rem', color: 'var(--neu-text-ghost)', opacity: 0.35 }}>⊞</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ── Main Page ─────────────────────────────────────────────────
 export default function AssignmentsPage() {
   const [searchParams] = useSearchParams()
   const [offerings, setOfferings] = useState([])
@@ -300,6 +341,7 @@ export default function AssignmentsPage() {
   const [loading, setLoading] = useState(false)
   const [showCreate, setShowCreate] = useState(false)
   const [viewSubmissions, setViewSubmissions] = useState(null)
+  const { menu, open: openMenu, close: closeMenu } = useContextMenu()
 
   useEffect(() => {
     teacherAPI.getMyOfferings()
@@ -327,108 +369,73 @@ export default function AssignmentsPage() {
   const upcoming = assignments.filter(a => new Date(a.due_date) > now)
   const overdue  = assignments.filter(a => new Date(a.due_date) <= now)
 
+  const ctxItems = (a) => [
+    { label: 'View Submissions', icon: Eye, onClick: x => setViewSubmissions(x) },
+    { divider: true },
+    { label: 'Delete', icon: Trash2, danger: true, onClick: async (x) => {
+      if (!confirm('Delete this assignment?')) return
+      try { await teacherAPI.deleteAssignment(x.id); toast.success('Deleted'); fetchAssignments() }
+      catch { toast.error('Failed to delete') }
+    }},
+  ]
+
+  const selectStyle = {
+    background: 'var(--neu-surface-deep)',
+    boxShadow: 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)',
+    border: '1px solid var(--neu-border)',
+    borderRadius: '0.75rem', padding: '0.6rem 0.9rem',
+    fontSize: '0.85rem', color: 'var(--neu-text-primary)', outline: 'none',
+    cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
+    minWidth: 260,
+  }
+
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-center justify-between flex-wrap gap-4">
+    <div style={{ maxWidth: 980, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem', paddingBottom: '2rem' }}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 className="font-display font-bold text-2xl text-slate-800">Assignments</h1>
-          <p className="text-slate-400 text-sm mt-0.5">{assignments.length} assignments created</p>
+          <h1 style={{ fontSize: '1.55rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', marginBottom: '0.2rem' }}>Assignments</h1>
+          <p style={{ fontSize: '0.82rem', color: 'var(--neu-text-ghost)' }}>{assignments.length} assignments created</p>
         </div>
-        <div className="flex items-center gap-3">
-          <select value={selectedOffering} onChange={e => setSelectedOffering(e.target.value)}
-            className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-600 focus:outline-none focus:border-blue-400 bg-white min-w-[240px]">
-            <option value="">-- Select Course --</option>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <select value={selectedOffering} onChange={e => setSelectedOffering(e.target.value)} style={selectStyle}>
             {offerings.map(o => <option key={o.id} value={o.id}>{o.course_name} — Sec {o.section}</option>)}
           </select>
-          <button onClick={() => setShowCreate(true)} disabled={!selectedOffering}
-            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors">
-            <Plus size={16} /> Create Assignment
-          </button>
+          <NeuBtn onClick={() => setShowCreate(true)} disabled={!offerings.length}><Plus size={14} /> New Assignment</NeuBtn>
         </div>
       </div>
 
-      {/* Submissions Panel (inline below header) */}
-      {viewSubmissions && (
-        <SubmissionsPanel
-          assignment={viewSubmissions}
-          onClose={() => setViewSubmissions(null)}
-          onRefresh={fetchAssignments}
-        />
-      )}
-
-      {/* Assignments List */}
-      {!selectedOffering ? (
-        <div className="bg-white rounded-2xl border border-slate-200 flex flex-col items-center justify-center py-20">
-          <FileText size={40} className="text-slate-300 mb-3" />
-          <p className="font-semibold text-slate-600">Select a course to view assignments</p>
+      {/* Content */}
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '3rem' }}>
+          <Loader2 size={28} style={{ color: '#5b8af0', animation: 'spin 0.8s linear infinite' }} />
         </div>
-      ) : loading ? (
-        <div className="space-y-3">{Array.from({length:3}).map((_,i)=>(
-          <div key={i} className="bg-white rounded-2xl border border-slate-200 p-5 animate-pulse space-y-2">
-            <div className="h-4 bg-slate-100 rounded-lg w-1/2" />
-            <div className="h-3 bg-slate-100 rounded-lg w-full" />
-          </div>
-        ))}</div>
       ) : assignments.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-slate-200 flex flex-col items-center justify-center py-20">
-          <FileText size={40} className="text-slate-300 mb-3" />
-          <p className="font-semibold text-slate-600">No assignments yet</p>
-          <p className="text-slate-400 text-sm mt-1">Create your first assignment for this course</p>
+        <div style={{ ...neu({ padding: '3.5rem 2rem' }), display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ width: 56, height: 56, borderRadius: '1rem', background: 'rgba(167,139,250,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)' }}>
+            <FileText size={24} style={{ color: '#a78bfa' }} />
+          </div>
+          <p style={{ fontWeight: 700, color: 'var(--neu-text-secondary)', fontSize: '0.93rem' }}>No assignments yet</p>
+          <p style={{ fontSize: '0.8rem', color: 'var(--neu-text-ghost)' }}>Create your first assignment for this course</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {assignments.map(a => {
-            const isPast = new Date(a.due_date) <= now
-            const submissionCount = a.submission_count || 0
-            const gradedCount = a.graded_count || 0
-            return (
-              <div key={a.id} className={`bg-white rounded-2xl border p-5 group hover:shadow-sm transition-shadow ${isPast ? 'border-slate-200' : 'border-slate-200 border-l-4 border-l-purple-400'}`}>
-                <div className="flex items-start gap-4">
-                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${isPast ? 'bg-slate-100' : 'bg-purple-100'}`}>
-                    <FileText size={18} className={isPast ? 'text-slate-400' : 'text-purple-600'} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap mb-1">
-                      <h3 className="font-display font-bold text-slate-800">{a.title}</h3>
-                      <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-lg font-medium">{a.total_marks} marks</span>
-                      {isPast
-                        ? <span className="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded-full">Closed</span>
-                        : <span className="text-xs bg-purple-100 text-purple-700 font-semibold px-2 py-0.5 rounded-full">Active</span>}
-                    </div>
-                    {a.description && <p className="text-slate-500 text-sm line-clamp-1 mb-2">{a.description}</p>}
-                    <div className="flex items-center gap-4 text-xs text-slate-400">
-                      <span className="flex items-center gap-1">
-                        <Clock size={11} />
-                        Due: {formatDateTime(a.due_date)}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Users size={11} />
-                        {submissionCount} submitted
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <CheckCircle2 size={11} className="text-emerald-400" />
-                        {gradedCount} graded
-                      </span>
-                    </div>
-                  </div>
-                  <button onClick={() => setViewSubmissions(viewSubmissions?.id === a.id ? null : a)}
-                    className="flex items-center gap-2 px-3 py-2 bg-slate-100 hover:bg-purple-100 text-slate-600 hover:text-purple-600 rounded-xl text-xs font-semibold transition-colors flex-shrink-0">
-                    <Eye size={13} /> Submissions
-                  </button>
-                </div>
-              </div>
-            )
-          })}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          <AssignmentGroup
+            title="Upcoming" icon={Clock} color='#3ecf8e' bg='rgba(62,207,142,0.1)'
+            assignments={upcoming} onRightClick={openMenu} onViewSubmissions={setViewSubmissions}
+          />
+          <AssignmentGroup
+            title="Past Due" icon={AlertCircle} color='#f26b6b' bg='rgba(242,107,107,0.1)'
+            assignments={overdue} onRightClick={openMenu} onViewSubmissions={setViewSubmissions}
+          />
         </div>
       )}
 
-      {showCreate && (
-        <CreateAssignmentModal
-          offeringId={selectedOffering}
-          onClose={() => setShowCreate(false)}
-          onSuccess={fetchAssignments}
-        />
-      )}
+      {showCreate && <CreateModal offeringId={selectedOffering} onClose={() => setShowCreate(false)} onSuccess={fetchAssignments} />}
+      {viewSubmissions && <SubmissionsModal assignment={viewSubmissions} onClose={() => setViewSubmissions(null)} onRefresh={fetchAssignments} />}
+      <ContextMenu menu={menu} close={closeMenu} items={menu ? ctxItems(menu.row) : []} />
     </div>
   )
 }

@@ -1,120 +1,190 @@
+// ═══════════════════════════════════════════════════════════════
+//  AttendancePage.jsx  —  Neumorphic Theme
+//  Replace: frontend/src/pages/teacher/AttendancePage.jsx
+// ═══════════════════════════════════════════════════════════════
+
 import { useState, useEffect, useCallback } from 'react'
+import {
+  ClipboardCheck, BookOpen, BarChart2, AlertTriangle,
+  Plus, Loader2, CheckCircle2, Clock, X,
+} from 'lucide-react'
+import toast from 'react-hot-toast'
 import { useSearchParams } from 'react-router-dom'
 import { teacherAPI } from '../../api/teacher.api'
-import { formatDate, formatDateTime, calcPercentage, getAttendanceBg, getAttendanceColor } from '../../utils/helpers'
-import toast from 'react-hot-toast'
-import {
-  Plus, ClipboardCheck, AlertTriangle, ChevronDown,
-  ChevronRight, Loader2, X, CheckCircle2, XCircle,
-  Clock, Users, BookOpen, BarChart2
-} from 'lucide-react'
 
-const STATUS_CFG = {
-  present: { cls: 'bg-emerald-500', label: 'Present', abbr: 'P' },
-  absent:  { cls: 'bg-red-500',     label: 'Absent',  abbr: 'A' },
-  late:    { cls: 'bg-orange-400',  label: 'Late',    abbr: 'L' },
-  excused: { cls: 'bg-blue-400',    label: 'Excused', abbr: 'E' },
+// ── Shared styles ─────────────────────────────────────────────
+const neu = (extra = {}) => ({
+  background: 'var(--neu-surface)',
+  boxShadow: 'var(--neu-raised)',
+  border: '1px solid var(--neu-border)',
+  borderRadius: '1.25rem',
+  ...extra,
+})
+
+const inputStyle = {
+  width: '100%',
+  background: 'var(--neu-surface-deep)',
+  boxShadow: 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)',
+  border: '1px solid var(--neu-border)',
+  borderRadius: '0.75rem',
+  padding: '0.6rem 0.9rem',
+  fontSize: '0.85rem',
+  color: 'var(--neu-text-primary)',
+  outline: 'none',
+  fontFamily: "'DM Sans', sans-serif",
 }
 
-const TABS = ['mark', 'sessions', 'report', 'short']
+const selectStyle = {
+  ...inputStyle,
+  cursor: 'pointer',
+}
 
-// ── Create Session Modal ───────────────────────────
-function CreateSessionModal({ offeringId, onClose, onSuccess }) {
-  const today = new Date().toISOString().split('T')[0]
-  const [form, setForm] = useState({
-    offering_id: offeringId,
-    session_date: today,
-    start_time: '09:00',
-    end_time: '10:30',
-    topic: '',
-    session_type: 'lecture',
-    is_makeup: false,
-  })
-  const [loading, setLoading] = useState(false)
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+const STATUS_CFG = {
+  present: { label: 'Present', abbr: 'P', color: '#3ecf8e', bg: 'rgba(62,207,142,0.15)' },
+  absent:  { label: 'Absent',  abbr: 'A', color: '#f26b6b', bg: 'rgba(242,107,107,0.15)' },
+  late:    { label: 'Late',    abbr: 'L', color: '#f5a623', bg: 'rgba(245,166,35,0.15)'  },
+  excused: { label: 'Excused', abbr: 'E', color: '#5b8af0', bg: 'rgba(91,138,240,0.15)'  },
+}
 
-  const handleSubmit = async () => {
-    if (!form.topic) { toast.error('Topic is required'); return }
-    setLoading(true)
-    try {
-      await teacherAPI.createSession(form)
-      toast.success('Session created successfully')
-      onSuccess(); onClose()
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed') }
-    finally { setLoading(false) }
-  }
+const thStyle = {
+  textAlign: 'left', padding: '0.7rem 1rem',
+  fontSize: '0.68rem', fontWeight: 700,
+  color: 'var(--neu-text-ghost)',
+  textTransform: 'uppercase', letterSpacing: '0.06em',
+  borderBottom: '1px solid var(--neu-border)',
+  whiteSpace: 'nowrap',
+}
 
-  const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:border-blue-400 transition-all"
+const tdStyle = {
+  padding: '0.7rem 1rem',
+  fontSize: '0.82rem',
+  color: 'var(--neu-text-secondary)',
+  borderBottom: '1px solid var(--neu-border-inner)',
+}
 
+const formatDate = (d) => d ? new Date(d).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
+const formatDateTime = (d) => d ? new Date(d).toLocaleString('en-PK', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'
+
+// ── Section header ────────────────────────────────────────────
+function SectionHeader({ title, sub, right }) {
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">
-        <div className="flex items-center justify-between p-6 border-b border-slate-100">
-          <h3 className="font-display font-bold text-lg text-slate-800">Create Session</h3>
-          <button onClick={onClose} className="p-2 hover:bg-slate-100 rounded-xl"><X size={18} className="text-slate-500" /></button>
-        </div>
-        <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-slate-500 font-medium mb-1.5">Date *</label>
-              <input className={inputCls} type="date" value={form.session_date} onChange={e => set('session_date', e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 font-medium mb-1.5">Type</label>
-              <select className={inputCls} value={form.session_type} onChange={e => set('session_type', e.target.value)}>
-                <option value="lecture">Lecture</option>
-                <option value="lab">Lab</option>
-                <option value="tutorial">Tutorial</option>
-              </select>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs text-slate-500 font-medium mb-1.5">Start Time</label>
-              <input className={inputCls} type="time" value={form.start_time} onChange={e => set('start_time', e.target.value)} />
-            </div>
-            <div>
-              <label className="block text-xs text-slate-500 font-medium mb-1.5">End Time</label>
-              <input className={inputCls} type="time" value={form.end_time} onChange={e => set('end_time', e.target.value)} />
-            </div>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 font-medium mb-1.5">Topic *</label>
-            <input className={inputCls} value={form.topic} onChange={e => set('topic', e.target.value)} placeholder="e.g. Introduction to OOP" />
-          </div>
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={form.is_makeup} onChange={e => set('is_makeup', e.target.checked)} className="w-4 h-4 rounded text-blue-600" />
-            <span className="text-sm text-slate-600">Makeup class</span>
-          </label>
-        </div>
-        <div className="p-6 pt-0 flex gap-3">
-          <button onClick={onClose} className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium rounded-xl transition-colors">Cancel</button>
-          <button onClick={handleSubmit} disabled={loading}
-            className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2">
-            {loading ? <><Loader2 size={16} className="animate-spin" /> Creating...</> : 'Create Session'}
-          </button>
-        </div>
+    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
+      <div>
+        <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>{title}</h2>
+        {sub && <p style={{ fontSize: '0.76rem', color: 'var(--neu-text-ghost)', marginTop: '0.15rem' }}>{sub}</p>}
+      </div>
+      {right}
+    </div>
+  )
+}
+
+// ── Neu primary button ────────────────────────────────────────
+function NeuBtn({ onClick, disabled, loading: isLoading, accent = '#5b8af0', children, style = {} }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled || isLoading}
+      style={{
+        display: 'flex', alignItems: 'center', gap: '0.45rem',
+        padding: '0.6rem 1.2rem',
+        borderRadius: '0.875rem', border: 'none',
+        background: `linear-gradient(145deg, ${accent}ee, ${accent}bb)`,
+        boxShadow: `4px 4px 12px var(--neu-shadow-dark), -2px -2px 6px var(--neu-shadow-light)`,
+        color: '#fff', fontSize: '0.8rem', fontWeight: 700,
+        fontFamily: "'DM Sans', sans-serif",
+        cursor: disabled || isLoading ? 'not-allowed' : 'pointer',
+        opacity: disabled || isLoading ? 0.6 : 1,
+        transition: 'transform 0.14s, box-shadow 0.14s',
+        ...style,
+      }}
+      onMouseEnter={e => { if (!disabled && !isLoading) e.currentTarget.style.transform = 'translateY(-1px)' }}
+      onMouseLeave={e => { e.currentTarget.style.transform = '' }}
+    >
+      {isLoading ? <Loader2 size={14} style={{ animation: 'spin 0.8s linear infinite' }} /> : null}
+      {children}
+    </button>
+  )
+}
+
+// ── Modal ─────────────────────────────────────────────────────
+function Modal({ children, onClose }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(10,14,22,0.6)', backdropFilter: 'blur(8px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+      <div style={{ ...neu({ borderRadius: '1.5rem' }), width: '100%', maxWidth: 480, overflow: 'hidden', boxShadow: 'var(--neu-raised-lg)' }}>
+        {children}
       </div>
     </div>
   )
 }
 
-// ── Mark Attendance Tab ────────────────────────────
+// ── Create Session Modal ──────────────────────────────────────
+function CreateSessionModal({ offeringId, onClose, onSuccess }) {
+  const [form, setForm] = useState({ session_date: new Date().toISOString().split('T')[0], topic: '', session_type: 'lecture', start_time: '', end_time: '', is_makeup: false })
+  const [loading, setLoading] = useState(false)
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+
+  const handleSubmit = async () => {
+    if (!form.topic.trim()) { toast.error('Topic required'); return }
+    setLoading(true)
+    try {
+      await teacherAPI.createSession({ offering_id: offeringId, ...form })
+      toast.success('Session created!')
+      onSuccess(); onClose()
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to create session')
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>New Session</h2>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neu-text-ghost)', padding: '0.25rem' }}><X size={18} /></button>
+      </div>
+      <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+        {[
+          { label: 'Date', key: 'session_date', type: 'date' },
+          { label: 'Topic *', key: 'topic', type: 'text' },
+          { label: 'Start Time', key: 'start_time', type: 'time' },
+          { label: 'End Time', key: 'end_time', type: 'time' },
+        ].map(({ label, key, type }) => (
+          <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+            <label style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{label}</label>
+            <input type={type} value={form[key]} onChange={e => set(key, e.target.value)} style={inputStyle} />
+          </div>
+        ))}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+          <label style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Type</label>
+          <select value={form.session_type} onChange={e => set('session_type', e.target.value)} style={selectStyle}>
+            {['lecture', 'lab', 'tutorial', 'workshop'].map(t => <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>)}
+          </select>
+        </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.82rem', color: 'var(--neu-text-secondary)' }}>
+          <input type="checkbox" checked={form.is_makeup} onChange={e => set('is_makeup', e.target.checked)} />
+          Makeup session
+        </label>
+      </div>
+      <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--neu-border)', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+        <button onClick={onClose} style={{ ...inputStyle, width: 'auto', padding: '0.6rem 1.1rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem' }}>Cancel</button>
+        <NeuBtn onClick={handleSubmit} loading={loading}>Create Session</NeuBtn>
+      </div>
+    </Modal>
+  )
+}
+
+// ── Mark Attendance Tab ───────────────────────────────────────
 function MarkAttendanceTab({ offeringId }) {
   const [sessions, setSessions]   = useState([])
   const [students, setStudents]   = useState([])
   const [selectedSession, setSelectedSession] = useState(null)
-  const [attendance, setAttendance] = useState({}) // {student_id: status}
+  const [attendance, setAttendance] = useState({})
   const [loading, setLoading]     = useState(false)
   const [saving, setSaving]       = useState(false)
   const [showCreate, setShowCreate] = useState(false)
-  const [existingRecords, setExistingRecords] = useState([])
 
   const loadSessions = useCallback(async () => {
-    try {
-      const res = await teacherAPI.getOfferingSessions(offeringId)
-      setSessions(res.data.data?.sessions || [])
-    } catch { toast.error('Failed to load sessions') }
+    try { const res = await teacherAPI.getOfferingSessions(offeringId); setSessions(res.data.data?.sessions || []) }
+    catch { toast.error('Failed to load sessions') }
   }, [offeringId])
 
   const loadStudents = useCallback(async () => {
@@ -122,131 +192,107 @@ function MarkAttendanceTab({ offeringId }) {
       const res = await teacherAPI.getOfferingStudents(offeringId)
       const studs = res.data.data?.students || []
       setStudents(studs)
-      // Default all present
-      const defaultAtt = {}
-      studs.forEach(s => { defaultAtt[s.student_id] = 'present' })
-      setAttendance(defaultAtt)
+      const d = {}; studs.forEach(s => { d[s.student_id] = 'present' }); setAttendance(d)
     } catch { toast.error('Failed to load students') }
   }, [offeringId])
 
-  useEffect(() => {
-    loadSessions()
-    loadStudents()
-  }, [offeringId])
+  useEffect(() => { loadSessions(); loadStudents() }, [offeringId])
 
   const handleSelectSession = async (session) => {
     setSelectedSession(session)
     if (session.attendance_marked) {
-      // Load existing records
       setLoading(true)
       try {
         const res = await teacherAPI.getSessionAttendance(session.id)
         const records = res.data.data?.records || []
-        setExistingRecords(records)
-        const existing = {}
-        records.forEach(r => { existing[r.student_id] = r.status })
-        // Fill defaults for students not in records
-        const merged = {}
-        students.forEach(s => { merged[s.student_id] = existing[s.student_id] || 'absent' })
+        const existing = {}; records.forEach(r => { existing[r.student_id] = r.status })
+        const merged = {}; students.forEach(s => { merged[s.student_id] = existing[s.student_id] || 'absent' })
         setAttendance(merged)
-      } catch { toast.error('Failed to load existing attendance') }
+      } catch { toast.error('Failed to load attendance') }
       finally { setLoading(false) }
     } else {
-      setExistingRecords([])
-      const defaultAtt = {}
-      students.forEach(s => { defaultAtt[s.student_id] = 'present' })
-      setAttendance(defaultAtt)
+      const d = {}; students.forEach(s => { d[s.student_id] = 'present' }); setAttendance(d)
     }
   }
 
-  const setAll = (status) => {
-    const all = {}
-    students.forEach(s => { all[s.student_id] = status })
-    setAttendance(all)
-  }
+  const setAll = (status) => { const a = {}; students.forEach(s => { a[s.student_id] = status }); setAttendance(a) }
 
   const handleSave = async () => {
     if (!selectedSession) { toast.error('Select a session first'); return }
     setSaving(true)
     try {
-      const records = students.map(s => ({
-        student_id: s.student_id,
-        status: attendance[s.student_id] || 'absent',
-      }))
-      await teacherAPI.markAttendance(selectedSession.id, { records })
-      toast.success(`Attendance saved for ${records.length} students`)
-      loadSessions()
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed to save') }
+      const records = students.map(s => ({ student_id: s.student_id, status: attendance[s.student_id] || 'absent' }))
+      if (selectedSession.attendance_marked) {
+        await Promise.all(records.map(r => teacherAPI.updateAttendance(selectedSession.id, r.student_id, { status: r.status })))
+      } else {
+        await teacherAPI.markAttendance(selectedSession.id, { records })
+      }
+      toast.success('Attendance saved!'); loadSessions()
+    } catch { toast.error('Failed to save attendance') }
     finally { setSaving(false) }
   }
 
-  const counts = Object.values(attendance).reduce((acc, s) => {
-    acc[s] = (acc[s] || 0) + 1; return acc
-  }, {})
+  const counts = Object.values(attendance).reduce((a, s) => { a[s] = (a[s] || 0) + 1; return a }, {})
 
   return (
-    <div className="space-y-5">
-      {/* Session Selector + New Session btn */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="flex-1 min-w-[220px]">
-          <label className="block text-xs text-slate-500 font-medium mb-1.5">Select Session</label>
-          <select
-            value={selectedSession?.id || ''}
-            onChange={e => handleSelectSession(sessions.find(s => s.id === parseInt(e.target.value)))}
-            className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-700 focus:outline-none focus:border-blue-400"
-          >
-            <option value="">-- Select a session --</option>
-            {sessions.map(s => (
-              <option key={s.id} value={s.id}>
-                {formatDate(s.session_date)} — {s.topic} {s.attendance_marked ? '✓' : ''}
-              </option>
-            ))}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      {/* Session selector + new session */}
+      <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <label style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '0.35rem' }}>Session</label>
+          <select style={selectStyle} value={selectedSession?.id || ''} onChange={e => { const s = sessions.find(x => x.id === parseInt(e.target.value)); if (s) handleSelectSession(s) }}>
+            <option value="">-- Select Session --</option>
+            {sessions.map(s => <option key={s.id} value={s.id}>{formatDate(s.session_date)} — {s.topic} {s.attendance_marked ? '✓' : ''}</option>)}
           </select>
         </div>
-        <div className="pt-5">
-          <button onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl text-sm font-semibold transition-colors">
-            <Plus size={15} /> New Session
-          </button>
-        </div>
+        <NeuBtn onClick={() => setShowCreate(true)}><Plus size={14} /> New Session</NeuBtn>
       </div>
 
       {selectedSession && (
         <>
-          {/* Session info */}
-          <div className="p-4 bg-blue-50 rounded-xl border border-blue-100 flex items-center gap-4 flex-wrap">
-            <div>
-              <p className="text-blue-800 font-semibold text-sm">{selectedSession.topic}</p>
-              <p className="text-blue-600 text-xs">{formatDate(selectedSession.session_date)} · {selectedSession.session_type}</p>
+          {/* Session info bar */}
+          <div style={{
+            ...neu({ borderRadius: '0.875rem', padding: '0.85rem 1rem' }),
+            background: 'rgba(91,138,240,0.06)',
+            display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
+          }}>
+            <div style={{ flex: 1 }}>
+              <p style={{ fontWeight: 700, fontSize: '0.87rem', color: 'var(--neu-text-primary)' }}>{selectedSession.topic}</p>
+              <p style={{ fontSize: '0.72rem', color: 'var(--neu-text-ghost)' }}>{formatDate(selectedSession.session_date)} · {selectedSession.session_type}</p>
             </div>
             {selectedSession.attendance_marked && (
-              <span className="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-1 rounded-lg flex items-center gap-1">
+              <span style={{ background: 'rgba(62,207,142,0.15)', color: '#3ecf8e', fontSize: '0.72rem', fontWeight: 700, padding: '0.3rem 0.7rem', borderRadius: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                 <CheckCircle2 size={12} /> Already Marked
               </span>
             )}
           </div>
 
           {/* Bulk actions + stats */}
-          <div className="flex items-center justify-between flex-wrap gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-slate-500 font-medium">Mark all as:</span>
-              {['present','absent','late','excused'].map(s => (
-                <button key={s} onClick={() => setAll(s)}
-                  className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-colors capitalize ${
-                    s === 'present' ? 'border-emerald-200 text-emerald-700 hover:bg-emerald-50' :
-                    s === 'absent'  ? 'border-red-200 text-red-700 hover:bg-red-50' :
-                    s === 'late'    ? 'border-orange-200 text-orange-700 hover:bg-orange-50' :
-                                     'border-blue-200 text-blue-700 hover:bg-blue-50'
-                  }`}>
-                  {s}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--neu-text-ghost)', fontWeight: 600 }}>Mark all:</span>
+              {Object.entries(STATUS_CFG).map(([st, cfg]) => (
+                <button key={st} onClick={() => setAll(st)}
+                  style={{
+                    padding: '0.3rem 0.8rem', borderRadius: '0.5rem',
+                    border: `1px solid ${cfg.color}40`,
+                    background: cfg.bg, color: cfg.color,
+                    fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer',
+                    fontFamily: "'DM Sans', sans-serif",
+                    transition: 'transform 0.12s',
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
+                  onMouseLeave={e => e.currentTarget.style.transform = ''}
+                >
+                  {cfg.label}
                 </button>
               ))}
             </div>
-            <div className="flex items-center gap-3 text-xs text-slate-500">
-              {Object.entries(counts).map(([s, c]) => (
-                <span key={s} className="flex items-center gap-1 font-medium">
-                  <span className={`w-2 h-2 rounded-full ${STATUS_CFG[s]?.cls}`} />
-                  {c} {s}
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              {Object.entries(counts).map(([st, c]) => (
+                <span key={st} style={{ fontSize: '0.72rem', fontWeight: 600, color: STATUS_CFG[st]?.color || 'var(--neu-text-ghost)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_CFG[st]?.color }} />
+                  {c} {st}
                 </span>
               ))}
             </div>
@@ -254,83 +300,73 @@ function MarkAttendanceTab({ offeringId }) {
 
           {/* Student List */}
           {loading ? (
-            <div className="flex items-center justify-center h-32">
-              <Loader2 className="animate-spin text-blue-600 w-6 h-6" />
-            </div>
+            <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Loader2 size={24} style={{ color: '#5b8af0', animation: 'spin 0.8s linear infinite' }} /></div>
           ) : (
-            <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-100 bg-slate-50/50">
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">#</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Student</th>
-                    <th className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Roll No</th>
-                    <th className="text-center px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">Status</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-50">
-                  {students.map((s, idx) => {
-                    const current = attendance[s.student_id] || 'present'
-                    return (
-                      <tr key={s.student_id} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 text-slate-400 text-xs">{idx + 1}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className="w-7 h-7 bg-blue-100 rounded-lg flex items-center justify-center text-blue-700 text-xs font-bold">
-                              {s.full_name?.[0] || '?'}
+            <div style={{ ...neu(), overflow: 'hidden' }}>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      {['#', 'Student', 'Roll No', 'Status'].map(h => (
+                        <th key={h} style={thStyle}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {students.map((student, idx) => {
+                      const st = attendance[student.student_id] || 'present'
+                      return (
+                        <tr key={student.student_id}
+                          style={{ transition: 'background 0.12s' }}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--neu-surface-deep)'}
+                          onMouseLeave={e => e.currentTarget.style.background = ''}
+                        >
+                          <td style={{ ...tdStyle, width: 40, color: 'var(--neu-text-ghost)' }}>{idx + 1}</td>
+                          <td style={{ ...tdStyle, fontWeight: 600, color: 'var(--neu-text-primary)' }}>{student.full_name}</td>
+                          <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '0.75rem' }}>{student.roll_number}</td>
+                          <td style={tdStyle}>
+                            <div style={{ display: 'flex', gap: '0.35rem' }}>
+                              {Object.entries(STATUS_CFG).map(([s, cfg]) => (
+                                <button key={s} onClick={() => setAttendance(p => ({ ...p, [student.student_id]: s }))}
+                                  title={cfg.label}
+                                  style={{
+                                    width: 30, height: 30, borderRadius: '0.5rem', border: 'none', cursor: 'pointer',
+                                    background: st === s ? cfg.color : 'var(--neu-surface-deep)',
+                                    color: st === s ? '#fff' : 'var(--neu-text-ghost)',
+                                    fontSize: '0.68rem', fontWeight: 800,
+                                    boxShadow: st === s
+                                      ? `3px 3px 8px var(--neu-shadow-dark), -1px -1px 4px ${cfg.color}60`
+                                      : 'inset 2px 2px 4px var(--neu-shadow-dark), inset -1px -1px 3px var(--neu-shadow-light)',
+                                    transition: 'all 0.14s',
+                                  }}>
+                                  {cfg.abbr}
+                                </button>
+                              ))}
                             </div>
-                            <span className="font-medium text-slate-700">{s.full_name}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 text-slate-400 font-mono text-xs">{s.roll_number}</td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center justify-center gap-1.5">
-                            {['present','absent','late','excused'].map(st => (
-                              <button
-                                key={st}
-                                onClick={() => setAttendance(p => ({ ...p, [s.student_id]: st }))}
-                                className={`w-8 h-8 rounded-lg text-xs font-bold transition-all border-2 ${
-                                  current === st
-                                    ? `${STATUS_CFG[st].cls} text-white border-transparent`
-                                    : 'bg-white text-slate-400 border-slate-200 hover:border-slate-300'
-                                }`}
-                                title={STATUS_CFG[st].label}
-                              >
-                                {STATUS_CFG[st].abbr}
-                              </button>
-                            ))}
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
-          {/* Save */}
-          <div className="flex justify-end">
-            <button onClick={handleSave} disabled={saving}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition-colors shadow-sm shadow-blue-600/20">
-              {saving ? <><Loader2 size={15} className="animate-spin" /> Saving...</> : <><ClipboardCheck size={15} /> Save Attendance</>}
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <NeuBtn onClick={handleSave} loading={saving}><ClipboardCheck size={14} /> Save Attendance</NeuBtn>
           </div>
         </>
       )}
 
       {showCreate && (
-        <CreateSessionModal
-          offeringId={offeringId}
-          onClose={() => setShowCreate(false)}
-          onSuccess={loadSessions}
-        />
+        <CreateSessionModal offeringId={offeringId} onClose={() => setShowCreate(false)} onSuccess={loadSessions} />
       )}
     </div>
   )
 }
 
-// ── Sessions History Tab ───────────────────────────
+// ── Sessions History Tab ──────────────────────────────────────
 function SessionsTab({ offeringId }) {
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -343,43 +379,49 @@ function SessionsTab({ offeringId }) {
   }, [offeringId])
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200">
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+    <div style={{ ...neu(), overflow: 'hidden' }}>
+      <div style={{ overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr className="border-b border-slate-100">
+            <tr>
               {['Date', 'Topic', 'Type', 'Time', 'Attendance', 'Marked At'].map(h => (
-                <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                <th key={h} style={thStyle}>{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-50">
+          <tbody>
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} className="animate-pulse">
+                <tr key={i}>
                   {Array.from({ length: 6 }).map((_, j) => (
-                    <td key={j} className="px-4 py-3"><div className="h-4 bg-slate-100 rounded-lg" /></td>
+                    <td key={j} style={tdStyle}><div style={{ height: 16, borderRadius: '0.5rem', background: 'var(--neu-surface-deep)', animation: 'pulse 1.4s ease-in-out infinite' }} /></td>
                   ))}
                 </tr>
               ))
             ) : sessions.length === 0 ? (
-              <tr><td colSpan={6} className="text-center py-14 text-slate-400">No sessions yet — create your first session</td></tr>
+              <tr><td colSpan={6} style={{ ...tdStyle, textAlign: 'center', padding: '3rem', color: 'var(--neu-text-ghost)' }}>No sessions yet — create your first session</td></tr>
             ) : (
               sessions.map(s => (
-                <tr key={s.id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 text-slate-700 font-medium">{formatDate(s.session_date)}</td>
-                  <td className="px-4 py-3 text-slate-600">{s.topic}</td>
-                  <td className="px-4 py-3">
-                    <span className="capitalize text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-lg font-medium">{s.session_type}</span>
-                    {s.is_makeup && <span className="ml-1 text-xs bg-orange-100 text-orange-600 px-2 py-0.5 rounded-lg font-medium">Makeup</span>}
+                <tr key={s.id}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--neu-surface-deep)'}
+                  onMouseLeave={e => e.currentTarget.style.background = ''}
+                  style={{ transition: 'background 0.12s' }}
+                >
+                  <td style={{ ...tdStyle, fontWeight: 600 }}>{formatDate(s.session_date)}</td>
+                  <td style={tdStyle}>{s.topic}</td>
+                  <td style={tdStyle}>
+                    <span style={{ background: 'var(--neu-surface-deep)', color: 'var(--neu-text-muted)', fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.55rem', borderRadius: '0.4rem', textTransform: 'capitalize' }}>
+                      {s.session_type}
+                    </span>
+                    {s.is_makeup && <span style={{ marginLeft: '0.35rem', background: 'rgba(245,166,35,0.12)', color: '#f5a623', fontSize: '0.68rem', fontWeight: 700, padding: '0.15rem 0.45rem', borderRadius: '0.35rem' }}>Makeup</span>}
                   </td>
-                  <td className="px-4 py-3 text-slate-500 text-xs">{s.start_time} – {s.end_time}</td>
-                  <td className="px-4 py-3">
+                  <td style={{ ...tdStyle, fontSize: '0.75rem', color: 'var(--neu-text-ghost)' }}>{s.start_time} – {s.end_time}</td>
+                  <td style={tdStyle}>
                     {s.attendance_marked
-                      ? <span className="flex items-center gap-1 text-emerald-600 text-xs font-semibold"><CheckCircle2 size={13} /> Marked</span>
-                      : <span className="flex items-center gap-1 text-slate-400 text-xs"><Clock size={13} /> Pending</span>}
+                      ? <span style={{ color: '#3ecf8e', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.3rem' }}><CheckCircle2 size={13} /> Marked</span>
+                      : <span style={{ color: 'var(--neu-text-ghost)', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Clock size={13} /> Pending</span>}
                   </td>
-                  <td className="px-4 py-3 text-slate-400 text-xs">{s.marked_at ? formatDateTime(s.marked_at) : '—'}</td>
+                  <td style={{ ...tdStyle, fontSize: '0.72rem', color: 'var(--neu-text-ghost)' }}>{formatDateTime(s.marked_at)}</td>
                 </tr>
               ))
             )}
@@ -390,7 +432,7 @@ function SessionsTab({ offeringId }) {
   )
 }
 
-// ── Attendance Report Tab ──────────────────────────
+// ── Report Tab ────────────────────────────────────────────────
 function ReportTab({ offeringId }) {
   const [report, setReport] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -402,56 +444,60 @@ function ReportTab({ offeringId }) {
       .finally(() => setLoading(false))
   }, [offeringId])
 
-  if (loading) return <div className="flex items-center justify-center h-40"><Loader2 className="animate-spin text-blue-600 w-6 h-6" /></div>
+  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '2.5rem' }}><Loader2 size={26} style={{ color: '#5b8af0', animation: 'spin 0.8s linear infinite' }} /></div>
   if (!report) return null
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="bg-blue-50 rounded-2xl p-5 border border-blue-100">
-          <p className="text-blue-600 text-xs font-semibold uppercase tracking-wide mb-1">Total Sessions</p>
-          <p className="text-3xl font-display font-bold text-blue-700">{report.total_sessions}</p>
-        </div>
-        <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200">
-          <p className="text-slate-500 text-xs font-semibold uppercase tracking-wide mb-1">Total Students</p>
-          <p className="text-3xl font-display font-bold text-slate-700">{report.total_students}</p>
-        </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.85rem' }}>
+        {[
+          { label: 'Total Sessions', value: report.total_sessions, color: '#5b8af0', bg: 'rgba(91,138,240,0.08)' },
+          { label: 'Total Students', value: report.total_students, color: 'var(--neu-text-secondary)', bg: 'var(--neu-surface-deep)' },
+        ].map(({ label, value, color, bg }) => (
+          <div key={label} style={{ ...neu({ borderRadius: '0.875rem', padding: '1.25rem 1.5rem' }), background: bg }}>
+            <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.4rem' }}>{label}</p>
+            <p style={{ fontSize: '2rem', fontWeight: 800, color, fontFamily: 'Outfit,sans-serif' }}>{value}</p>
+          </div>
+        ))}
       </div>
-      <div className="bg-white rounded-2xl border border-slate-200">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+      <div style={{ ...neu(), overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
-              <tr className="border-b border-slate-100">
-                {['Student', 'Roll No', 'Attended', 'Absent', 'Percentage', 'Status'].map(h => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">{h}</th>
-                ))}
+              <tr>
+                {['Student', 'Roll No', 'Attended', 'Absent', 'Percentage', 'Status'].map(h => <th key={h} style={thStyle}>{h}</th>)}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
-              {report.report?.map(r => (
-                <tr key={r.student_id} className="hover:bg-slate-50 transition-colors">
-                  <td className="px-4 py-3 font-medium text-slate-700">{r.full_name}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-slate-400">{r.roll_number}</td>
-                  <td className="px-4 py-3 text-emerald-600 font-semibold">{r.attended}</td>
-                  <td className="px-4 py-3 text-red-500 font-semibold">{r.absent}</td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="w-20 h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${r.percentage >= 75 ? 'bg-emerald-400' : r.percentage >= 60 ? 'bg-orange-400' : 'bg-red-500'}`}
-                          style={{ width: `${r.percentage}%` }} />
+            <tbody>
+              {report.report?.map(r => {
+                const pct = r.percentage || 0
+                const color = pct >= 75 ? '#3ecf8e' : pct >= 60 ? '#f5a623' : '#f26b6b'
+                return (
+                  <tr key={r.student_id}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--neu-surface-deep)'}
+                    onMouseLeave={e => e.currentTarget.style.background = ''}
+                    style={{ transition: 'background 0.12s' }}
+                  >
+                    <td style={{ ...tdStyle, fontWeight: 600, color: 'var(--neu-text-primary)' }}>{r.full_name}</td>
+                    <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '0.75rem' }}>{r.roll_number}</td>
+                    <td style={{ ...tdStyle, color: '#3ecf8e', fontWeight: 700 }}>{r.attended}</td>
+                    <td style={{ ...tdStyle, color: '#f26b6b', fontWeight: 700 }}>{r.absent}</td>
+                    <td style={tdStyle}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                        <div style={{ width: 60, height: 5, borderRadius: '999px', background: 'var(--neu-surface-deep)', overflow: 'hidden', boxShadow: 'inset 1px 1px 3px var(--neu-shadow-dark)' }}>
+                          <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: '999px' }} />
+                        </div>
+                        <span style={{ fontWeight: 700, color, fontSize: '0.8rem' }}>{pct.toFixed(1)}%</span>
                       </div>
-                      <span className={`text-xs font-bold ${getAttendanceColor(r.percentage)}`}>{r.percentage}%</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    {r.status === 'short'
-                      ? <span className="text-xs bg-red-100 text-red-700 font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1 w-fit">
-                          <AlertTriangle size={11} /> Short
-                        </span>
-                      : <span className="text-xs bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-0.5 rounded-full w-fit">OK</span>}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td style={tdStyle}>
+                      <span style={{ background: pct >= 75 ? 'rgba(62,207,142,0.12)' : 'rgba(242,107,107,0.12)', color: pct >= 75 ? '#3ecf8e' : '#f26b6b', fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.55rem', borderRadius: '0.4rem' }}>
+                        {pct >= 75 ? 'OK' : 'Short'}
+                      </span>
+                    </td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
         </div>
@@ -460,55 +506,57 @@ function ReportTab({ offeringId }) {
   )
 }
 
-// ── Short Attendance Tab ───────────────────────────
+// ── Short Attendance Tab ──────────────────────────────────────
 function ShortAttendanceTab({ offeringId }) {
-  const [data, setData] = useState(null)
+  const [students, setStudents] = useState([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     teacherAPI.getShortAttendance(offeringId)
-      .then(r => setData(r.data.data))
+      .then(r => setStudents(r.data.data?.students || []))
       .catch(() => toast.error('Failed to load short attendance'))
       .finally(() => setLoading(false))
   }, [offeringId])
 
-  if (loading) return <div className="flex items-center justify-center h-40"><Loader2 className="animate-spin text-blue-600 w-6 h-6" /></div>
-
-  const students = data?.students || []
+  if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '2.5rem' }}><Loader2 size={26} style={{ color: '#5b8af0', animation: 'spin 0.8s linear infinite' }} /></div>
 
   return (
-    <div className="space-y-4">
-      <div className={`p-4 rounded-xl border flex items-center gap-3 ${students.length > 0 ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'}`}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+      <div style={{
+        ...neu({ borderRadius: '0.875rem', padding: '0.85rem 1.1rem' }),
+        background: students.length > 0 ? 'rgba(242,107,107,0.06)' : 'rgba(62,207,142,0.06)',
+        display: 'flex', alignItems: 'center', gap: '0.75rem',
+      }}>
         {students.length > 0
-          ? <AlertTriangle size={20} className="text-red-500 flex-shrink-0" />
-          : <CheckCircle2 size={20} className="text-emerald-500 flex-shrink-0" />}
-        <p className={`font-semibold text-sm ${students.length > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+          ? <AlertTriangle size={18} style={{ color: '#f26b6b', flexShrink: 0 }} />
+          : <CheckCircle2 size={18} style={{ color: '#3ecf8e', flexShrink: 0 }} />}
+        <p style={{ fontSize: '0.83rem', fontWeight: 700, color: students.length > 0 ? '#f26b6b' : '#3ecf8e' }}>
           {students.length > 0 ? `${students.length} students below 75% attendance threshold` : 'All students have satisfactory attendance'}
         </p>
       </div>
       {students.length > 0 && (
-        <div className="bg-white rounded-2xl border border-slate-200">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+        <div style={{ ...neu(), overflow: 'hidden' }}>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
-                <tr className="border-b border-slate-100">
-                  {['Student', 'Roll No', 'Attended', 'Total', 'Percentage', 'Shortage'].map(h => (
-                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-slate-400 uppercase tracking-wide">{h}</th>
-                  ))}
+                <tr>
+                  {['Student', 'Roll No', 'Attended', 'Total', 'Percentage', 'Shortage'].map(h => <th key={h} style={thStyle}>{h}</th>)}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-50">
+              <tbody>
                 {students.map(s => (
-                  <tr key={s.student_id} className="hover:bg-red-50/30 transition-colors">
-                    <td className="px-4 py-3 font-medium text-slate-700">{s.full_name}</td>
-                    <td className="px-4 py-3 font-mono text-xs text-slate-400">{s.roll_number}</td>
-                    <td className="px-4 py-3 text-emerald-600 font-semibold">{s.attended_classes}</td>
-                    <td className="px-4 py-3 text-slate-500">{s.total_classes}</td>
-                    <td className="px-4 py-3">
-                      <span className="text-red-600 font-bold">{s.percentage.toFixed(1)}%</span>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-0.5 rounded-lg">
+                  <tr key={s.student_id}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(242,107,107,0.04)'}
+                    onMouseLeave={e => e.currentTarget.style.background = ''}
+                    style={{ transition: 'background 0.12s' }}
+                  >
+                    <td style={{ ...tdStyle, fontWeight: 600, color: 'var(--neu-text-primary)' }}>{s.full_name}</td>
+                    <td style={{ ...tdStyle, fontFamily: 'monospace', fontSize: '0.75rem' }}>{s.roll_number}</td>
+                    <td style={{ ...tdStyle, color: '#3ecf8e', fontWeight: 700 }}>{s.attended_classes}</td>
+                    <td style={{ ...tdStyle, color: 'var(--neu-text-muted)' }}>{s.total_classes}</td>
+                    <td style={{ ...tdStyle, color: '#f26b6b', fontWeight: 800 }}>{s.percentage?.toFixed(1)}%</td>
+                    <td style={tdStyle}>
+                      <span style={{ background: 'rgba(242,107,107,0.12)', color: '#f26b6b', fontSize: '0.72rem', fontWeight: 800, padding: '0.2rem 0.55rem', borderRadius: '0.4rem' }}>
                         -{s.shortage?.toFixed(1)}%
                       </span>
                     </td>
@@ -523,7 +571,14 @@ function ShortAttendanceTab({ offeringId }) {
   )
 }
 
-// ── Main Page ──────────────────────────────────────
+// ── Main Page ─────────────────────────────────────────────────
+const TAB_CFG = [
+  { key: 'mark',     label: 'Mark Attendance', icon: ClipboardCheck },
+  { key: 'sessions', label: 'Session History',  icon: BookOpen },
+  { key: 'report',   label: 'Full Report',      icon: BarChart2 },
+  { key: 'short',    label: 'Short Attendance', icon: AlertTriangle },
+]
+
 export default function AttendancePage() {
   const [searchParams] = useSearchParams()
   const [offerings, setOfferings] = useState([])
@@ -542,50 +597,59 @@ export default function AttendancePage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const TAB_CFG = [
-    { key: 'mark',     label: 'Mark Attendance', icon: ClipboardCheck },
-    { key: 'sessions', label: 'Session History',  icon: BookOpen },
-    { key: 'report',   label: 'Full Report',      icon: BarChart2 },
-    { key: 'short',    label: 'Short Attendance', icon: AlertTriangle },
-  ]
-
   return (
-    <div className="space-y-6 max-w-7xl mx-auto">
+    <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem', paddingBottom: '2rem' }}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg) } } @keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:1} }`}</style>
+
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 className="font-display font-bold text-2xl text-slate-800">Attendance</h1>
-          <p className="text-slate-400 text-sm mt-0.5">Manage sessions and track student attendance</p>
+          <h1 style={{ fontSize: '1.55rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', marginBottom: '0.2rem' }}>Attendance</h1>
+          <p style={{ fontSize: '0.82rem', color: 'var(--neu-text-ghost)' }}>Manage sessions and track student attendance</p>
         </div>
-        {/* Offering Selector */}
-        <select
-          value={selectedOffering}
-          onChange={e => setSelectedOffering(e.target.value)}
-          className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm text-slate-600 focus:outline-none focus:border-blue-400 bg-white min-w-[260px]"
-        >
-          <option value="">-- Select Course --</option>
-          {offerings.map(o => (
-            <option key={o.id} value={o.id}>{o.course_name} — Sec {o.section}</option>
-          ))}
-        </select>
+        {loading ? (
+          <Loader2 size={20} style={{ color: '#5b8af0', animation: 'spin 0.8s linear infinite' }} />
+        ) : (
+          <select value={selectedOffering} onChange={e => setSelectedOffering(e.target.value)}
+            style={{ ...selectStyle, width: 'auto', minWidth: 260 }}>
+            <option value="">-- Select Course --</option>
+            {offerings.map(o => <option key={o.id} value={o.id}>{o.course_name} — Sec {o.section}</option>)}
+          </select>
+        )}
       </div>
 
       {!selectedOffering ? (
-        <div className="bg-white rounded-2xl border border-slate-200 flex flex-col items-center justify-center py-20">
-          <ClipboardCheck size={40} className="text-slate-300 mb-3" />
-          <p className="font-semibold text-slate-600">Select a course to manage attendance</p>
+        <div style={{ ...neu({ padding: '4rem 2rem' }), display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ width: 56, height: 56, borderRadius: '1rem', background: 'rgba(91,138,240,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)' }}>
+            <ClipboardCheck size={24} style={{ color: '#5b8af0' }} />
+          </div>
+          <p style={{ fontWeight: 700, color: 'var(--neu-text-secondary)', fontSize: '0.93rem' }}>Select a course to manage attendance</p>
         </div>
       ) : (
         <>
           {/* Tabs */}
-          <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit overflow-x-auto">
+          <div style={{
+            display: 'flex', gap: '0.35rem', flexWrap: 'wrap',
+            background: 'var(--neu-surface-deep)',
+            boxShadow: 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)',
+            padding: '0.35rem', borderRadius: '1rem', width: 'fit-content',
+          }}>
             {TAB_CFG.map(t => {
               const Icon = t.icon
+              const active = tab === t.key
               return (
                 <button key={t.key} onClick={() => setTab(t.key)}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all whitespace-nowrap ${
-                    tab === t.key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                  }`}>
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: '0.45rem',
+                    padding: '0.55rem 1rem', borderRadius: '0.75rem', border: 'none',
+                    background: active ? 'var(--neu-surface)' : 'none',
+                    boxShadow: active ? '4px 4px 10px var(--neu-shadow-dark), -2px -2px 6px var(--neu-shadow-light)' : 'none',
+                    color: active ? 'var(--neu-text-primary)' : 'var(--neu-text-ghost)',
+                    fontSize: '0.8rem', fontWeight: active ? 700 : 600,
+                    fontFamily: "'DM Sans', sans-serif",
+                    cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.18s',
+                  }}
+                >
                   <Icon size={14} /> {t.label}
                 </button>
               )
