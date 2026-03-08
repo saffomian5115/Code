@@ -1,157 +1,432 @@
+// ═══════════════════════════════════════════════════════════════
+//  AttendancePage.jsx  (Student)  —  Neumorphic
+//  → frontend/src/pages/student/AttendancePage.jsx
+// ═══════════════════════════════════════════════════════════════
 import { useState, useEffect } from 'react'
+import {
+  ClipboardCheck, Loader2, AlertTriangle,
+  Calendar, BarChart3, ChevronRight,
+} from 'lucide-react'
+import {
+  ResponsiveContainer, AreaChart, Area,
+  XAxis, YAxis, Tooltip, CartesianGrid,
+} from 'recharts'
+import toast from 'react-hot-toast'
 import { studentAPI } from '../../api/student.api'
 import { authStore } from '../../store/authStore'
-import { formatDate, getAttendanceColor, getAttendanceBg } from '../../utils/helpers'
-import toast from 'react-hot-toast'
-import { ClipboardCheck, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react'
 
-const STATUS_CFG = {
-  present: { cls: 'bg-emerald-500 text-white', label: 'P' },
-  absent:  { cls: 'bg-red-500 text-white',     label: 'A' },
-  late:    { cls: 'bg-orange-400 text-white',  label: 'L' },
-  excused: { cls: 'bg-blue-400 text-white',    label: 'E' },
+/* ─── helpers ────────────────────────────────────────────────── */
+const neu = (extra = {}) => ({
+  background: 'var(--neu-surface)',
+  boxShadow: 'var(--neu-raised)',
+  border: '1px solid var(--neu-border)',
+  borderRadius: '1.25rem',
+  ...extra,
+})
+const neuInset = (extra = {}) => ({
+  background: 'var(--neu-surface-deep)',
+  boxShadow: 'inset 4px 4px 10px var(--neu-shadow-dark), inset -3px -3px 7px var(--neu-shadow-light)',
+  border: '1px solid var(--neu-border)',
+  borderRadius: '0.875rem',
+  ...extra,
+})
+
+const PALETTE = ['#5b8af0','#a78bfa','#3ecf8e','#f59e0b','#f87171','#38bdf8','#fb923c','#e879f9']
+const cc = (idx) => PALETTE[idx % PALETTE.length]
+
+const STATUS = {
+  present: { color: '#3ecf8e', bg: 'rgba(62,207,142,0.13)',  label: 'Present' },
+  absent:  { color: '#f26b6b', bg: 'rgba(242,107,107,0.13)', label: 'Absent'  },
+  late:    { color: '#f5a623', bg: 'rgba(245,166,35,0.13)',  label: 'Late'    },
+  excused: { color: '#a78bfa', bg: 'rgba(167,139,250,0.13)', label: 'Excused' },
 }
 
+const fmt = (d) => d
+  ? new Date(d).toLocaleDateString('en-PK', { day: 'numeric', month: 'short', year: 'numeric' })
+  : '—'
+
+/* ─── Circular Ring ──────────────────────────────────────────── */
+function Ring({ pct = 0, color = '#5b8af0', size = 110, stroke = 10 }) {
+  const r    = (size - stroke) / 2
+  const circ = 2 * Math.PI * r
+  const dash = (pct / 100) * circ
+  return (
+    <div style={{ position: 'relative', width: size, height: size }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--neu-border)" strokeWidth={stroke} />
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+          strokeDasharray={`${dash} ${circ - dash}`} strokeLinecap="round"
+          style={{ transition: 'stroke-dasharray 0.7s cubic-bezier(0.34,1.56,0.64,1)' }} />
+      </svg>
+      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: '1.4rem', fontWeight: 900, color, fontFamily: 'Outfit,sans-serif', lineHeight: 1 }}>
+          {Math.round(pct)}%
+        </span>
+        <span style={{ fontSize: '0.6rem', color: 'var(--neu-text-ghost)', fontWeight: 600, marginTop: 2 }}>attendance</span>
+      </div>
+    </div>
+  )
+}
+
+/* ─── KPI chip ───────────────────────────────────────────────── */
+function Chip({ label, value, color }) {
+  return (
+    <div style={{ ...neuInset({ padding: '0.85rem 1rem', borderRadius: '0.875rem' }), display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+      <p style={{ fontSize: '0.63rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '0.07em' }}>{label}</p>
+      <p style={{ fontSize: '1.45rem', fontWeight: 900, color: color || 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', lineHeight: 1 }}>{value}</p>
+    </div>
+  )
+}
+
+/* ─── Dot Grid ───────────────────────────────────────────────── */
+function DotGrid({ sessions }) {
+  const DOT_COLOR = { present:'#3ecf8e', absent:'#f26b6b', late:'#f5a623', excused:'#a78bfa' }
+  const last35 = sessions.slice(-35)
+  if (!last35.length) return (
+    <p style={{ fontSize: '0.78rem', color: 'var(--neu-text-ghost)', textAlign: 'center', padding: '1rem 0' }}>No sessions yet</p>
+  )
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5 }}>
+        {last35.map((s, i) => {
+          const c = DOT_COLOR[s.status]
+          return (
+            <div key={i} title={`${fmt(s.session_date)} — ${s.status}`}
+              style={{
+                aspectRatio: '1', borderRadius: 5,
+                background: c || 'var(--neu-border)',
+                boxShadow: c
+                  ? `inset 2px 2px 4px rgba(0,0,0,0.15), 0 1px 4px ${c}55`
+                  : 'inset 2px 2px 5px var(--neu-shadow-dark), inset -1px -1px 3px var(--neu-shadow-light)',
+                transition: 'transform 0.12s',
+              }}
+              onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.3)'}
+              onMouseLeave={e => e.currentTarget.style.transform = ''} />
+          )
+        })}
+      </div>
+      <div style={{ display: 'flex', gap: '0.9rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
+        {[['#3ecf8e','Present'],['#f26b6b','Absent'],['#f5a623','Late'],['#a78bfa','Excused']].map(([c,l]) => (
+          <div key={l} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+            <div style={{ width: 10, height: 10, borderRadius: 2, background: c }} />
+            <span style={{ fontSize: '0.65rem', color: 'var(--neu-text-ghost)', fontWeight: 600 }}>{l}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ─── Area Tooltip ───────────────────────────────────────────── */
+function AreaTip({ active, payload, label }) {
+  if (!active || !payload?.length) return null
+  return (
+    <div style={{ ...neu({ padding: '0.4rem 0.75rem', borderRadius: '0.65rem' }), fontSize: '0.73rem', color: 'var(--neu-text-primary)' }}>
+      <b>{label}</b>: {Math.round(payload[0]?.value)}%
+    </div>
+  )
+}
+
+/* ─── Main Page ──────────────────────────────────────────────── */
 export default function AttendancePage() {
   const user = authStore.getUser()
-  const studentId = user?.user_id
+  const [enrollments,     setEnrollments]     = useState([])
+  const [selectedIdx,     setSelectedIdx]     = useState(0)
+  const [sessions,        setSessions]        = useState([])
+  const [summary,         setSummary]         = useState(null)
+  const [loading,         setLoading]         = useState(true)
+  const [sessLoading,     setSessLoading]     = useState(false)
 
-  const [enrollments, setEnrollments] = useState([])
-  const [selectedOffering, setSelectedOffering] = useState('')
-  const [attendanceData, setAttendanceData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [attLoading, setAttLoading] = useState(false)
-
+  /* Load approved enrollments once */
   useEffect(() => {
     studentAPI.getEnrollments()
       .then(r => {
-        const enr = r.data.data?.enrollments || []
-        setEnrollments(enr)
-        if (enr.length > 0) setSelectedOffering(String(enr[0].offering_id))
+        const enrs = (r.data.data?.enrollments || []).filter(e => e.is_approved)
+        setEnrollments(enrs)
       })
-      .catch(() => toast.error('Failed to load courses'))
+      .catch(() => toast.error('Failed to load enrollments'))
       .finally(() => setLoading(false))
   }, [])
 
+  /* Load attendance when selected course changes */
   useEffect(() => {
-    if (!selectedOffering || !studentId) return
-    setAttLoading(true)
-    studentAPI.getAttendance(studentId, selectedOffering)
-      .then(r => setAttendanceData(r.data.data))
+    const enr = enrollments[selectedIdx]
+    if (!enr || !user?.user_id) return
+    setSessLoading(true)
+    setSessions([])
+    setSummary(null)
+    studentAPI.getAttendance(user.user_id, enr.offering_id)
+      .then(r => {
+        const d = r.data.data || {}
+        setSessions(d.records  || [])
+        setSummary(d.summary   || null)
+      })
       .catch(() => toast.error('Failed to load attendance'))
-      .finally(() => setAttLoading(false))
-  }, [selectedOffering])
+      .finally(() => setSessLoading(false))
+  }, [selectedIdx, enrollments, user?.user_id])
 
-  const summary = attendanceData?.summary
-  const records = attendanceData?.records || []
-  const pct = summary?.percentage || 0
-  const isShort = pct < 75
+  /* Derived */
+  const pct       = summary?.percentage       || 0
+  const attended  = summary?.attended_classes || 0
+  const total     = summary?.total_classes    || 0
+  const absent    = total - attended
+  const pctColor  = pct >= 75 ? '#3ecf8e' : pct >= 60 ? '#f5a623' : '#f26b6b'
+  const isShort   = pct > 0 && pct < 75
+  const needMore  = Math.max(0, Math.ceil(total * 0.75 - attended))
 
-  // Calendar-style grouping
-  const grouped = records.reduce((acc, r) => {
-    const month = new Date(r.session_date).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
-    if (!acc[month]) acc[month] = []
-    acc[month].push(r)
-    return acc
-  }, {})
+  /* Weekly trend from session records */
+  const trendData = (() => {
+    if (sessions.length < 2) return []
+    const map = {}
+    sessions.forEach(s => {
+      if (!s.session_date) return
+      const d  = new Date(s.session_date)
+      const wk = `W${Math.ceil(d.getDate() / 7)}`
+      if (!map[wk]) map[wk] = { t: 0, p: 0 }
+      map[wk].t++
+      if (s.status === 'present' || s.status === 'late') map[wk].p++
+    })
+    return Object.entries(map).map(([wk, v]) => ({ week: wk, pct: Math.round((v.p / v.t) * 100) }))
+  })()
 
+  const selectedEnr = enrollments[selectedIdx]
+
+  /* ── Render ── */
   return (
-    <div className="space-y-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="font-display font-bold text-2xl text-slate-800">Attendance</h1>
-          <p className="text-slate-400 text-sm mt-0.5">Track your class attendance per course</p>
-        </div>
-        <select value={selectedOffering} onChange={e => setSelectedOffering(e.target.value)}
-          className="border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400 bg-white min-w-[240px]">
-          {enrollments.map(e => (
-            <option key={e.offering_id} value={e.offering_id}>{e.course_name} — Sec {e.section}</option>
-          ))}
-        </select>
-      </div>
+    <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: '2rem' }}>
+      <style>{`
+        @keyframes spin   { to { transform: rotate(360deg) } }
+        @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:none} }
+        @keyframes pulse  { 0%,100%{opacity:.4} 50%{opacity:.9} }
+      `}</style>
 
-      {attLoading ? (
-        <div className="flex items-center justify-center h-40"><Loader2 className="animate-spin text-emerald-500 w-6 h-6" /></div>
-      ) : summary ? (
-        <>
-          {/* Summary Card */}
-          <div className={`rounded-2xl p-6 border ${isShort ? 'bg-red-50 border-red-200' : 'bg-emerald-50 border-emerald-200'}`}>
-            <div className="flex items-start justify-between flex-wrap gap-4">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  {isShort
-                    ? <AlertTriangle size={20} className="text-red-500" />
-                    : <CheckCircle2 size={20} className="text-emerald-500" />}
-                  <h3 className={`font-display font-bold text-lg ${isShort ? 'text-red-700' : 'text-emerald-700'}`}>
-                    {isShort ? 'Attendance Shortage!' : 'Attendance OK'}
-                  </h3>
-                </div>
-                {isShort && (
-                  <p className="text-red-600 text-sm">You are below the 75% minimum requirement. You may be debarred from exams.</p>
-                )}
-              </div>
-              {/* Circle */}
-              <div className="relative w-24 h-24">
-                <svg className="w-24 h-24 -rotate-90" viewBox="0 0 36 36">
-                  <path d="M18 2.0845a15.9155 15.9155 0 0 1 0 31.831a15.9155 15.9155 0 0 1 0-31.831"
-                    fill="none" stroke="#e2e8f0" strokeWidth="3" />
-                  <path d="M18 2.0845a15.9155 15.9155 0 0 1 0 31.831a15.9155 15.9155 0 0 1 0-31.831"
-                    fill="none" stroke={isShort ? '#ef4444' : '#10b981'} strokeWidth="3"
-                    strokeDasharray={`${pct}, 100`} />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className={`font-display font-bold text-xl ${isShort ? 'text-red-600' : 'text-emerald-600'}`}>{pct.toFixed(0)}%</span>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-4 mt-4">
-              {[
-                { label: 'Total Classes', val: summary.total_classes },
-                { label: 'Attended',      val: summary.attended_classes, color: 'text-emerald-600' },
-                { label: 'Absent',        val: summary.total_classes - summary.attended_classes, color: 'text-red-500' },
-              ].map(s => (
-                <div key={s.label} className="bg-white/60 rounded-xl p-3 text-center">
-                  <p className={`text-2xl font-display font-bold ${s.color || 'text-slate-700'}`}>{s.val}</p>
-                  <p className="text-xs text-slate-500 mt-0.5">{s.label}</p>
-                </div>
-              ))}
-            </div>
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '6rem' }}>
+          <Loader2 size={30} style={{ color: '#5b8af0', animation: 'spin 0.8s linear infinite' }} />
+        </div>
+      ) : enrollments.length === 0 ? (
+        <div style={{ ...neu({ padding: '5rem 2rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.85rem' }) }}>
+          <div style={{ ...neuInset({ width: 64, height: 64, borderRadius: '1.25rem' }), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3ecf8e' }}>
+            <ClipboardCheck size={28} />
+          </div>
+          <p style={{ fontWeight: 700, color: 'var(--neu-text-secondary)', fontSize: '1rem' }}>No active enrollments</p>
+          <p style={{ fontSize: '0.8rem', color: 'var(--neu-text-ghost)' }}>Enroll in courses to track attendance</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: '1.1rem', alignItems: 'flex-start' }}>
+
+          {/* ══ LEFT SIDEBAR: Course list ══ */}
+          <div style={{
+            ...neu({ padding: '0.65rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }),
+            width: 235, flexShrink: 0, position: 'sticky', top: '1rem',
+          }}>
+            <p style={{ fontSize: '0.63rem', fontWeight: 800, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '0.09em', padding: '0.35rem 0.5rem 0.2rem' }}>
+              Courses
+            </p>
+            {enrollments.map((enr, idx) => {
+              const active  = idx === selectedIdx
+              const color   = cc(idx)
+              const init    = (enr.course_code || enr.course_name || '?').slice(0, 2).toUpperCase()
+              return (
+                <button key={enr.offering_id} onClick={() => setSelectedIdx(idx)}
+                  style={{
+                    width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
+                    padding: '0.65rem 0.75rem', borderRadius: '0.875rem',
+                    fontFamily: "'DM Sans', sans-serif", transition: 'all 0.18s',
+                    display: 'flex', alignItems: 'center', gap: '0.65rem',
+                    background: active ? 'var(--neu-surface)' : 'transparent',
+                    boxShadow: active ? '6px 6px 14px var(--neu-shadow-dark), -3px -3px 9px var(--neu-shadow-light)' : 'none',
+                  }}
+                  onMouseEnter={e => { if (!active) e.currentTarget.style.background = 'var(--neu-surface-deep)' }}
+                  onMouseLeave={e => { if (!active) e.currentTarget.style.background = 'transparent' }}
+                >
+                  {/* Course avatar */}
+                  <div style={{
+                    width: 34, height: 34, borderRadius: '0.65rem', flexShrink: 0,
+                    background: active ? color : `${color}20`,
+                    color: active ? '#fff' : color,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: '0.68rem', fontWeight: 900, fontFamily: 'Outfit,sans-serif',
+                    transition: 'all 0.18s',
+                    boxShadow: active
+                      ? `4px 4px 10px var(--neu-shadow-dark), -2px -2px 6px var(--neu-shadow-light), 0 3px 9px ${color}44`
+                      : 'inset 2px 2px 4px var(--neu-shadow-dark), inset -1px -1px 3px var(--neu-shadow-light)',
+                  }}>
+                    {init}
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <p style={{
+                      fontSize: '0.76rem', fontWeight: active ? 700 : 600,
+                      color: active ? 'var(--neu-text-primary)' : 'var(--neu-text-secondary)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      marginBottom: '0.08rem',
+                    }}>
+                      {enr.course_name}
+                    </p>
+                    <p style={{ fontSize: '0.62rem', color: 'var(--neu-text-ghost)', fontFamily: 'monospace' }}>
+                      {enr.course_code}
+                    </p>
+                  </div>
+
+                  {active && <ChevronRight size={13} style={{ color, flexShrink: 0 }} />}
+                </button>
+              )
+            })}
           </div>
 
-          {/* Session History */}
-          {Object.entries(grouped).map(([month, sessions]) => (
-            <div key={month} className="bg-white rounded-2xl border border-slate-200">
-              <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
-                <p className="font-semibold text-slate-700 text-sm">{month}</p>
-                <span className="text-xs text-slate-400">{sessions.length} sessions</span>
+          {/* ══ RIGHT: Main content ══ */}
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1rem', animation: 'fadeUp 0.25s ease both' }}>
+
+            {/* Course title */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              <div style={{ ...neuInset({ width: 44, height: 44, borderRadius: '0.875rem' }), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3ecf8e' }}>
+                <ClipboardCheck size={20} />
               </div>
-              <div className="divide-y divide-slate-50">
-                {sessions.map((s, i) => {
-                  const sc = STATUS_CFG[s.status] || STATUS_CFG.absent
-                  return (
-                    <div key={i} className="flex items-center gap-4 px-5 py-3 hover:bg-slate-50 transition-colors">
-                      <span className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-bold flex-shrink-0 ${sc.cls}`}>
-                        {sc.label}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-slate-700 truncate">{s.topic || 'Lecture'}</p>
-                        <p className="text-xs text-slate-400">{formatDate(s.session_date)} · {s.session_type}</p>
-                      </div>
-                      {s.remarks && <p className="text-xs text-slate-400 italic truncate max-w-[140px]">{s.remarks}</p>}
-                    </div>
-                  )
-                })}
+              <div>
+                <h1 style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', lineHeight: 1.2 }}>
+                  {selectedEnr?.course_name || 'Attendance'}
+                </h1>
+                <p style={{ fontSize: '0.73rem', color: 'var(--neu-text-ghost)' }}>
+                  {selectedEnr?.course_code}{selectedEnr?.instructor ? ` · ${selectedEnr.instructor}` : ''}
+                </p>
               </div>
             </div>
-          ))}
-          {records.length === 0 && (
-            <div className="text-center py-10 text-slate-400">No attendance records yet</div>
-          )}
-        </>
-      ) : (
-        <div className="bg-white rounded-2xl border border-slate-200 flex flex-col items-center justify-center py-20">
-          <ClipboardCheck size={40} className="text-slate-300 mb-3" />
-          <p className="text-slate-600 font-semibold">Select a course to view attendance</p>
+
+            {sessLoading ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: '5rem' }}>
+                <Loader2 size={26} style={{ color: '#5b8af0', animation: 'spin 0.8s linear infinite' }} />
+              </div>
+            ) : (
+              <>
+                {/* ── KPI row ── */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr 1fr 1fr 1fr', gap: '0.8rem', alignItems: 'stretch' }}>
+                  <div style={{ ...neu({ padding: '1.2rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'center' }) }}>
+                    <Ring pct={pct} color={pctColor} size={112} stroke={10} />
+                  </div>
+                  <Chip label="Classes Attended" value={attended}  color="#3ecf8e" />
+                  <Chip label="Total Sessions"   value={total}     color="var(--neu-text-primary)" />
+                  <Chip label="Absent"           value={absent}    color={absent > 0 ? '#f26b6b' : 'var(--neu-text-ghost)'} />
+                  <Chip label="Still Need"       value={needMore > 0 ? `${needMore} more` : '✓ OK'} color={needMore > 0 ? '#f59e0b' : '#3ecf8e'} />
+                </div>
+
+                {/* ── Warning ── */}
+                {isShort && (
+                  <div style={{
+                    ...neu({ padding: '0.9rem 1.1rem', borderRadius: '0.875rem', border: '1px solid rgba(242,107,107,0.3)', display: 'flex', alignItems: 'center', gap: '0.75rem' })
+                  }}>
+                    <div style={{ ...neuInset({ width: 38, height: 38, borderRadius: '0.75rem' }), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f26b6b', flexShrink: 0 }}>
+                      <AlertTriangle size={17} />
+                    </div>
+                    <div>
+                      <p style={{ fontSize: '0.85rem', fontWeight: 800, color: '#f26b6b' }}>Short Attendance Warning</p>
+                      <p style={{ fontSize: '0.73rem', color: 'var(--neu-text-ghost)', marginTop: '0.1rem' }}>
+                        {pct.toFixed(1)}% — attend {needMore} more class{needMore !== 1 ? 'es' : ''} to reach the 75% requirement.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Dot grid + Trend chart ── */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.9rem' }}>
+                  {/* Dot grid */}
+                  <div style={{ ...neu({ padding: '1.25rem' }) }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.9rem' }}>
+                      <Calendar size={14} style={{ color: '#3ecf8e' }} />
+                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>Session Grid</span>
+                      <span style={{ marginLeft: 'auto', fontSize: '0.68rem', color: 'var(--neu-text-ghost)' }}>Last 35 sessions</span>
+                    </div>
+                    <DotGrid sessions={sessions} />
+                  </div>
+
+                  {/* Trend chart */}
+                  <div style={{ ...neu({ padding: '1.25rem' }) }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.9rem' }}>
+                      <BarChart3 size={14} style={{ color: '#5b8af0' }} />
+                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>Weekly Trend</span>
+                    </div>
+                    {trendData.length > 1 ? (
+                      <ResponsiveContainer width="100%" height={148}>
+                        <AreaChart data={trendData} margin={{ top: 4, right: 4, bottom: 0, left: -22 }}>
+                          <defs>
+                            <linearGradient id="tG" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%"  stopColor={pctColor} stopOpacity={0.28} />
+                              <stop offset="95%" stopColor={pctColor} stopOpacity={0}    />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" stroke="var(--neu-border)" vertical={false} />
+                          <XAxis dataKey="week" tick={{ fill:'var(--neu-text-ghost)', fontSize:9, fontFamily:"'DM Sans'" }} axisLine={false} tickLine={false} />
+                          <YAxis domain={[0,100]} tick={{ fill:'var(--neu-text-ghost)', fontSize:9 }} axisLine={false} tickLine={false} />
+                          <Tooltip content={<AreaTip />} />
+                          <Area type="monotone" dataKey="pct" stroke={pctColor} strokeWidth={2.5} fill="url(#tG)" dot={{ fill:pctColor, r:3 }} activeDot={{ r:5 }} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div style={{ height: 148, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <p style={{ fontSize: '0.78rem', color: 'var(--neu-text-ghost)' }}>Not enough data for trend</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Session Table ── */}
+                <div style={{ ...neu({ overflow: 'hidden' }) }}>
+                  <div style={{ padding: '0.9rem 1.25rem', borderBottom: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <ClipboardCheck size={15} style={{ color: '#5b8af0' }} />
+                    <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>Session Log</span>
+                    <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: 'var(--neu-text-ghost)' }}>{sessions.length} sessions</span>
+                  </div>
+
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: 'var(--neu-surface-deep)' }}>
+                          {['#', 'Date', 'Topic', 'Type', 'Status', 'Remarks'].map(h => (
+                            <th key={h} style={{ textAlign: 'left', padding: '0.65rem 1rem', fontSize: '0.65rem', fontWeight: 800, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '0.07em', borderBottom: '1px solid var(--neu-border)', whiteSpace: 'nowrap' }}>
+                              {h}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sessions.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} style={{ padding: '3rem', textAlign: 'center', fontSize: '0.82rem', color: 'var(--neu-text-ghost)' }}>
+                              No sessions recorded yet
+                            </td>
+                          </tr>
+                        ) : sessions.map((s, i) => {
+                          const cfg = STATUS[s.status] || { color: 'var(--neu-text-ghost)', bg: 'var(--neu-surface-deep)', label: s.status || '—' }
+                          return (
+                            <tr key={i}
+                              onMouseEnter={e => e.currentTarget.style.background = 'var(--neu-surface-deep)'}
+                              onMouseLeave={e => e.currentTarget.style.background = ''}
+                              style={{ transition: 'background 0.12s' }}>
+                              <td style={{ padding: '0.62rem 1rem', fontSize: '0.7rem', color: 'var(--neu-text-ghost)', borderBottom: '1px solid var(--neu-border)', fontFamily: 'monospace' }}>{i + 1}</td>
+                              <td style={{ padding: '0.62rem 1rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--neu-text-primary)', borderBottom: '1px solid var(--neu-border)', whiteSpace: 'nowrap' }}>{fmt(s.session_date)}</td>
+                              <td style={{ padding: '0.62rem 1rem', fontSize: '0.8rem', color: 'var(--neu-text-secondary)', borderBottom: '1px solid var(--neu-border)', maxWidth: 180, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.topic || '—'}</td>
+                              <td style={{ padding: '0.62rem 1rem', borderBottom: '1px solid var(--neu-border)' }}>
+                                <span style={{ ...neuInset({ display: 'inline-block', padding: '0.18rem 0.55rem', borderRadius: '0.45rem' }), fontSize: '0.68rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'capitalize' }}>
+                                  {s.session_type || 'lecture'}
+                                </span>
+                              </td>
+                              <td style={{ padding: '0.62rem 1rem', borderBottom: '1px solid var(--neu-border)' }}>
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.28rem', background: cfg.bg, color: cfg.color, fontSize: '0.72rem', fontWeight: 700, padding: '0.2rem 0.65rem', borderRadius: '0.45rem' }}>
+                                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: cfg.color, flexShrink: 0 }} />
+                                  {cfg.label}
+                                </span>
+                              </td>
+                              <td style={{ padding: '0.62rem 1rem', fontSize: '0.75rem', color: 'var(--neu-text-ghost)', borderBottom: '1px solid var(--neu-border)' }}>{s.remarks || '—'}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
