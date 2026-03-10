@@ -10,7 +10,7 @@ import { authStore } from '../../store/authStore'
 import {
   LayoutDashboard, BookOpen, FileText, BarChart2, CreditCard,
   Bell, MessageSquare, Users, GraduationCap, Building2,
-  Calendar, ClipboardCheck, PenSquare, BrainCircuit,
+  Calendar, ClipboardCheck, PenSquare, BrainCircuit,Sparkles,
   BookMarked, Layers, Receipt, DoorOpen, LineChart, ScanLine,
 } from 'lucide-react'
 
@@ -27,6 +27,7 @@ const MENUS = {
     { label: 'Announcements',icon: Bell,            to: '/student/announcements' },
     { label: 'Chat',         icon: MessageSquare,   to: '/student/chat' },
     { label: 'AI Assistant', icon: BrainCircuit,    to: '/student/ai' },
+    { label: 'Practice Quiz',  icon: Sparkles,        to: '/student/practice-quiz' },
   ],
   teacher: [
     { label: 'Dashboard',    icon: LayoutDashboard, to: '/teacher/dashboard' },

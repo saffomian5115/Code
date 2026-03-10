@@ -6,9 +6,13 @@
 import { useState } from 'react'
 import Sidebar from './Sidebar'
 import Navbar from './Navbar'
+import { authStore } from '../../store/authStore'
+import ChatbotWidget from '../student/ChatbotWidget'
 
 export default function DashboardLayout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(true)
+  const user = authStore.getUser()
+  const isStudent = user?.role === 'student'
 
   return (
     <div style={{
@@ -35,12 +39,14 @@ export default function DashboardLayout({ children }) {
           flex: 1,
           overflowY: 'auto',
           padding: '1.5rem',
-          // Subtle inner shadow at top — depth feel
           boxShadow: 'inset 0 4px 12px rgba(163,177,198,0.18)',
         }}>
           {children}
         </main>
       </div>
+
+      {/* Floating AI Chatbot — students only */}
+      {isStudent && <ChatbotWidget />}
     </div>
   )
 }

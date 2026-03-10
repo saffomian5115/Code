@@ -37,7 +37,7 @@ class GeminiService:
     @classmethod
     def get_model(cls):
         if cls._model is None:
-            cls._model = genai.GenerativeModel("gemini-2.0-flash")
+            cls._model = genai.GenerativeModel("gemini-2.5-flash")
         return cls._model
 
     @classmethod

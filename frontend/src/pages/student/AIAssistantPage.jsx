@@ -1,281 +1,304 @@
+// ═══════════════════════════════════════════════════════════════
+//  AIAssistantPage.jsx  (Student)  —  Neumorphic
+//  → frontend/src/pages/student/AIAssistantPage.jsx
+//  Full-page AI Chatbot  (Practice Quiz is now a separate page)
+// ═══════════════════════════════════════════════════════════════
 import { useState, useRef, useEffect } from 'react'
+import {
+  BrainCircuit, Send, Loader2, RefreshCw, Sparkles,
+} from 'lucide-react'
 import { studentAPI } from '../../api/student.api'
 import { authStore } from '../../store/authStore'
-import toast from 'react-hot-toast'
-import {
-  BrainCircuit, Send, Loader2, PenSquare,
-  Sparkles, RefreshCw, ChevronDown, CheckCircle2, X
-} from 'lucide-react'
 
-const DIFFICULTY_CFG = {
-  easy:   'bg-emerald-100 text-emerald-700',
-  medium: 'bg-blue-100 text-blue-700',
-  hard:   'bg-red-100 text-red-700',
+/* ─── helpers ────────────────────────────────────────────────── */
+const neu = (extra = {}) => ({
+  background: 'var(--neu-surface)',
+  boxShadow: 'var(--neu-raised)',
+  border: '1px solid var(--neu-border)',
+  borderRadius: '1.25rem',
+  ...extra,
+})
+const neuInset = (extra = {}) => ({
+  background: 'var(--neu-surface-deep)',
+  boxShadow: 'inset 4px 4px 10px var(--neu-shadow-dark), inset -3px -3px 7px var(--neu-shadow-light)',
+  border: '1px solid var(--neu-border)',
+  borderRadius: '0.875rem',
+  ...extra,
+})
+
+/* ─── Suggested prompts ──────────────────────────────────────── */
+const SUGGESTIONS = [
+  { icon: '📊', text: 'What is my attendance status?' },
+  { icon: '💳', text: 'Check my fee voucher status' },
+  { icon: '🎓', text: 'What is my current CGPA?' },
+  { icon: '📝', text: 'Show my recent assignment grades' },
+]
+
+/* ─── Message bubble ─────────────────────────────────────────── */
+function Bubble({ msg }) {
+  const isUser = msg.role === 'user'
+  return (
+    <div style={{
+      display: 'flex',
+      flexDirection: isUser ? 'row-reverse' : 'row',
+      alignItems: 'flex-end',
+      gap: '0.5rem',
+      animation: 'fadeUp 0.22s ease both',
+    }}>
+      {/* Bot avatar */}
+      {!isUser && (
+        <div style={{
+          width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+          background: 'linear-gradient(145deg, #a78bfa, #7c5cdb)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          boxShadow: '3px 3px 8px var(--neu-shadow-dark), -2px -2px 5px var(--neu-shadow-light)',
+        }}>
+          <BrainCircuit size={14} style={{ color: '#fff' }} />
+        </div>
+      )}
+
+      <div style={{
+        maxWidth: '72%',
+        padding: '0.7rem 1rem',
+        borderRadius: isUser ? '1.1rem 1.1rem 0.3rem 1.1rem' : '1.1rem 1.1rem 1.1rem 0.3rem',
+        fontSize: '0.86rem', lineHeight: 1.6,
+        wordBreak: 'break-word', whiteSpace: 'pre-wrap',
+        ...(isUser ? {
+          background: 'linear-gradient(145deg, #a78bfa, #7c5cdb)',
+          color: '#fff',
+          boxShadow: '4px 4px 12px var(--neu-shadow-dark), -2px -2px 6px var(--neu-shadow-light), 0 4px 16px rgba(167,139,250,0.35)',
+        } : {
+          background: 'var(--neu-surface)',
+          color: 'var(--neu-text-primary)',
+          boxShadow: '4px 4px 10px var(--neu-shadow-dark), -2px -2px 6px var(--neu-shadow-light)',
+          border: '1px solid var(--neu-border)',
+        }),
+      }}>
+        {msg.text}
+      </div>
+    </div>
+  )
 }
 
-// ── AI Chatbot Component ───────────────────────────
-function Chatbot({ enrollments }) {
-  const user = authStore.getUser()
+/* ─── Typing indicator ───────────────────────────────────────── */
+function TypingDots() {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.5rem' }}>
+      <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(145deg, #a78bfa, #7c5cdb)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '3px 3px 8px var(--neu-shadow-dark)' }}>
+        <BrainCircuit size={14} style={{ color: '#fff' }} />
+      </div>
+      <div style={{ ...neuInset({ padding: '0.7rem 1rem', borderRadius: '1.1rem 1.1rem 1.1rem 0.3rem' }), display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
+        {[0, 0.18, 0.36].map((d, i) => (
+          <span key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: '#a78bfa', animation: `blink 1.2s ${d}s infinite` }} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/* ─── Main Page ──────────────────────────────────────────────── */
+export default function AIAssistantPage() {
+  const user      = authStore.getUser()
+  const firstName = user?.full_name?.split(' ')[0] || 'there'
+
   const [messages, setMessages] = useState([
-    { role: 'bot', text: `Hi ${user?.full_name?.split(' ')[0] || 'there'}! 👋 I'm your LMS assistant. Ask me about attendance, fees, results, assignments, or anything else.` }
+    { role: 'bot', text: `Hi ${firstName}! 👋 I'm your LMS assistant. Ask me about attendance, fees, results, assignments, quizzes, or anything academic.` }
   ])
-  const [input, setInput] = useState('')
+  const [input, setInput]     = useState('')
   const [loading, setLoading] = useState(false)
-  const [sessionId, setSessionId] = useState(null)
-  const endRef = useRef(null)
+  const [sessionId, setSId]   = useState(null)
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+  const endRef   = useRef(null)
+  const inputRef = useRef(null)
 
-  const send = async () => {
-    const text = input.trim()
-    if (!text) return
-    setMessages(p => [...p, { role: 'user', text }])
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
+
+  const send = async (text) => {
+    const msg = (text || input).trim()
+    if (!msg || loading) return
+    setMessages(p => [...p, { role: 'user', text: msg }])
     setInput('')
     setLoading(true)
     try {
-      const res = await studentAPI.sendChatbotMessage({
-        message: text,
-        session_id: sessionId,
-      })
-      const data = res.data.data
-      if (data?.session_id) setSessionId(data.session_id)
-      setMessages(p => [...p, { role: 'bot', text: data?.response || 'I couldn\'t understand that. Please try again.' }])
+      const res = await studentAPI.sendChatbotMessage({ message: msg, session_id: sessionId })
+      const d   = res.data.data
+      if (d?.session_id) setSId(d.session_id)
+      setMessages(p => [...p, { role: 'bot', text: d?.response || "I couldn't understand that. Please try again." }])
     } catch {
-      setMessages(p => [...p, { role: 'bot', text: 'Sorry, I\'m having trouble responding right now. Please try again.' }])
-    } finally { setLoading(false) }
+      setMessages(p => [...p, { role: 'bot', text: "Sorry, I'm having trouble right now. Please try again." }])
+    } finally {
+      setLoading(false)
+      setTimeout(() => inputRef.current?.focus(), 50)
+    }
   }
 
+  const handleKey = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send() }
+  }
+
+  const reset = () => {
+    setMessages([{ role: 'bot', text: `Hi ${firstName}! 👋 I'm your LMS assistant. Ask me about attendance, fees, results, assignments, quizzes, or anything academic.` }])
+    setInput('')
+    setSId(null)
+    setTimeout(() => inputRef.current?.focus(), 50)
+  }
+
+  const showSuggestions = messages.length <= 1
+
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 flex flex-col h-[500px]">
-      <div className="p-4 border-b border-slate-100 flex items-center gap-3">
-        <div className="w-9 h-9 bg-purple-100 rounded-xl flex items-center justify-center">
-          <BrainCircuit size={18} className="text-purple-600" />
+    <div style={{ maxWidth: 820, margin: '0 auto', display: 'flex', flexDirection: 'column', height: 'calc(100vh - 130px)', minHeight: 500 }}>
+      <style>{`
+        @keyframes spin    { to { transform: rotate(360deg) } }
+        @keyframes fadeUp  { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
+        @keyframes blink   { 0%,80%,100%{opacity:0.15} 40%{opacity:1} }
+        .chat-scroll::-webkit-scrollbar { width: 5px }
+        .chat-scroll::-webkit-scrollbar-thumb { background: var(--neu-border); border-radius: 5px }
+        .chat-scroll::-webkit-scrollbar-track { background: transparent }
+        textarea::-webkit-scrollbar { width: 4px }
+        textarea::-webkit-scrollbar-thumb { background: var(--neu-border); border-radius: 4px }
+      `}</style>
+
+      {/* ── Page title ── */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+          <div style={{ ...neuInset({ width: 44, height: 44, borderRadius: '0.875rem' }), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a78bfa' }}>
+            <BrainCircuit size={22} />
+          </div>
+          <div>
+            <h1 style={{ fontSize: '1.55rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit, sans-serif', marginBottom: '0.1rem' }}>
+              AI Assistant
+            </h1>
+            <p style={{ fontSize: '0.78rem', color: 'var(--neu-text-ghost)' }}>Ask anything about your academics</p>
+          </div>
         </div>
-        <div>
-          <p className="font-semibold text-slate-800 text-sm">LMS Assistant</p>
-          <p className="text-xs text-slate-400">Ask anything about your academics</p>
-        </div>
-        <div className="ml-auto w-2 h-2 bg-emerald-400 rounded-full" title="Online" />
+
+        {/* Reset button */}
+        <button onClick={reset}
+          style={{
+            display: 'flex', alignItems: 'center', gap: '0.4rem',
+            padding: '0.5rem 0.9rem', borderRadius: '0.75rem', border: 'none', cursor: 'pointer',
+            background: 'var(--neu-surface)',
+            boxShadow: '4px 4px 10px var(--neu-shadow-dark), -2px -2px 6px var(--neu-shadow-light)',
+            color: 'var(--neu-text-muted)', fontSize: '0.75rem', fontWeight: 600,
+            fontFamily: "'DM Sans', sans-serif",
+          }}>
+          <RefreshCw size={13} /> New Chat
+        </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            {m.role === 'bot' && (
-              <div className="w-7 h-7 bg-purple-100 rounded-full flex items-center justify-center mr-2 flex-shrink-0 mt-1">
-                <BrainCircuit size={13} className="text-purple-600" />
+
+      {/* ── Chat container ── */}
+      <div style={{ ...neu({ padding: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', flex: 1 }) }}>
+
+        {/* Messages */}
+        <div className="chat-scroll" style={{ flex: 1, overflowY: 'auto', padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
+
+          {messages.map((m, i) => <Bubble key={i} msg={m} />)}
+          {loading && <TypingDots />}
+
+          {/* Suggestion chips — only when fresh chat */}
+          {showSuggestions && !loading && (
+            <div style={{ marginTop: '0.5rem' }}>
+              <p style={{ fontSize: '0.7rem', color: 'var(--neu-text-ghost)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '0.65rem' }}>
+                Quick Suggestions
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.55rem' }}>
+                {SUGGESTIONS.map((s, i) => (
+                  <button key={i} onClick={() => send(s.text)}
+                    style={{
+                      textAlign: 'left', border: 'none', cursor: 'pointer',
+                      padding: '0.7rem 0.9rem', borderRadius: '0.875rem',
+                      background: 'var(--neu-surface-deep)',
+                      boxShadow: 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)',
+                      color: 'var(--neu-text-secondary)', fontSize: '0.8rem',
+                      fontFamily: "'DM Sans', sans-serif", lineHeight: 1.4,
+                      display: 'flex', alignItems: 'center', gap: '0.5rem',
+                      transition: 'all 0.15s',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.boxShadow = '4px 4px 10px var(--neu-shadow-dark), -2px -2px 6px var(--neu-shadow-light)'
+                      e.currentTarget.style.background = 'var(--neu-surface)'
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.boxShadow = 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)'
+                      e.currentTarget.style.background = 'var(--neu-surface-deep)'
+                    }}>
+                    <span style={{ fontSize: '1rem', flexShrink: 0 }}>{s.icon}</span>
+                    <span>{s.text}</span>
+                  </button>
+                ))}
               </div>
-            )}
-            <div className={`max-w-[80%] px-4 py-2.5 rounded-2xl text-sm ${m.role === 'user' ? 'bg-purple-600 text-white rounded-br-sm' : 'bg-slate-100 text-slate-700 rounded-bl-sm'}`}>
-              {m.text}
             </div>
+          )}
+
+          <div ref={endRef} />
+        </div>
+
+        {/* ── Input bar ── */}
+        <div style={{ padding: '0.9rem 1.25rem', borderTop: '1px solid var(--neu-border)', background: 'var(--neu-surface)', display: 'flex', alignItems: 'flex-end', gap: '0.65rem' }}>
+
+          {/* Bot icon */}
+          <div style={{ width: 36, height: 36, borderRadius: '0.75rem', flexShrink: 0, background: 'linear-gradient(145deg, #a78bfa, #7c5cdb)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '3px 3px 8px var(--neu-shadow-dark), 0 4px 12px rgba(167,139,250,0.3)' }}>
+            <Sparkles size={16} style={{ color: '#fff' }} />
           </div>
-        ))}
-        {loading && (
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 bg-purple-100 rounded-full flex items-center justify-center">
-              <BrainCircuit size={13} className="text-purple-600" />
-            </div>
-            <div className="bg-slate-100 rounded-2xl px-4 py-2.5 flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce" />
-              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.1s]" />
-              <span className="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce [animation-delay:0.2s]" />
-            </div>
+
+          {/* Textarea */}
+          <div style={{ flex: 1, ...neuInset({ borderRadius: '1rem', padding: 0 }), display: 'flex', alignItems: 'flex-end' }}>
+            <textarea
+              ref={inputRef}
+              rows={1}
+              value={input}
+              onChange={e => {
+                setInput(e.target.value)
+                e.target.style.height = 'auto'
+                e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'
+              }}
+              onKeyDown={handleKey}
+              placeholder="Ask about attendance, fee, results, quizzes…"
+              style={{
+                flex: 1, background: 'transparent', border: 'none', outline: 'none',
+                resize: 'none', padding: '0.7rem 0.95rem',
+                fontSize: '0.86rem', color: 'var(--neu-text-primary)',
+                fontFamily: "'DM Sans', sans-serif", lineHeight: 1.55,
+                maxHeight: 120, overflow: 'auto',
+              }}
+            />
           </div>
-        )}
-        <div ref={endRef} />
-      </div>
-      <div className="p-4 border-t border-slate-100 flex gap-2">
-        <input value={input} onChange={e => setInput(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') send() }}
-          placeholder="Ask about attendance, fee, results..."
-          className="flex-1 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-purple-400" />
-        <button onClick={send} disabled={!input.trim() || loading}
-          className="w-10 h-10 bg-purple-600 hover:bg-purple-500 disabled:opacity-40 text-white rounded-xl flex items-center justify-center transition-colors">
-          {loading ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-        </button>
-      </div>
-    </div>
-  )
-}
 
-// ── AI Practice Quiz Generator ─────────────────────
-function AIQuizGenerator({ enrollments }) {
-  const [form, setForm] = useState({ course_id: '', topic: '', difficulty: 'medium', num_questions: 5 })
-  const [quiz, setQuiz] = useState(null)
-  const [answers, setAnswers] = useState({})
-  const [result, setResult] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [phase, setPhase] = useState('setup') // setup | attempt | result
-  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
-
-  const handleGenerate = async () => {
-    if (!form.course_id || !form.topic) { toast.error('Select course and enter topic'); return }
-    setLoading(true)
-    try {
-      const res = await studentAPI.generateAIQuiz(form)
-      setQuiz(res.data.data)
-      setAnswers({})
-      setPhase('attempt')
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed to generate quiz') }
-    finally { setLoading(false) }
-  }
-
-  const handleSubmit = async () => {
-    if (!quiz) return
-    setLoading(true)
-    try {
-      const res = await studentAPI.submitAIQuiz({ ai_quiz_id: quiz.id, answers })
-      setResult(res.data.data)
-      setPhase('result')
-    } catch (err) { toast.error(err.response?.data?.message || 'Submission failed') }
-    finally { setLoading(false) }
-  }
-
-  const reset = () => { setQuiz(null); setAnswers({}); setResult(null); setPhase('setup') }
-
-  const questions = quiz?.questions_generated || []
-  const inputCls = "w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-blue-400"
-
-  if (phase === 'result' && result) return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6">
-      <div className="text-center mb-6">
-        <div className="w-16 h-16 bg-emerald-100 rounded-2xl flex items-center justify-center mx-auto mb-3">
-          <CheckCircle2 size={28} className="text-emerald-600" />
-        </div>
-        <h3 className="font-display font-bold text-xl text-slate-800">Quiz Complete!</h3>
-        <p className="text-5xl font-display font-bold text-emerald-600 mt-2">{parseFloat(result.score || 0).toFixed(1)}%</p>
-        <p className="text-slate-500 text-sm mt-1">AI Practice Quiz · {form.topic}</p>
-      </div>
-      {result.feedback && <p className="text-slate-600 text-sm bg-blue-50 rounded-xl p-4 mb-4">{result.feedback}</p>}
-      {result.weak_areas_identified?.length > 0 && (
-        <div className="bg-orange-50 rounded-xl p-4 mb-4">
-          <p className="text-orange-700 font-semibold text-sm mb-2">Areas to improve:</p>
-          <div className="flex flex-wrap gap-2">
-            {result.weak_areas_identified.map((w, i) => (
-              <span key={i} className="text-xs bg-orange-100 text-orange-700 px-2.5 py-1 rounded-full">{w}</span>
-            ))}
-          </div>
-        </div>
-      )}
-      <button onClick={reset} className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2">
-        <RefreshCw size={15} /> Generate New Quiz
-      </button>
-    </div>
-  )
-
-  if (phase === 'attempt' && quiz) return (
-    <div className="bg-white rounded-2xl border border-slate-200">
-      <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-        <div>
-          <h3 className="font-display font-bold text-slate-800">AI Practice Quiz</h3>
-          <p className="text-slate-400 text-sm">{form.topic} · {questions.length} questions</p>
-        </div>
-        <span className={`text-xs font-semibold px-2.5 py-1 rounded-xl capitalize ${DIFFICULTY_CFG[form.difficulty]}`}>{form.difficulty}</span>
-      </div>
-      <div className="p-5 space-y-5">
-        {questions.map((q, qi) => (
-          <div key={qi} className="space-y-2.5">
-            <p className="font-medium text-slate-800 text-sm"><span className="text-blue-600 font-bold mr-1">Q{qi + 1}.</span>{q.question || q.question_text}</p>
-            <div className="space-y-1.5 ml-4">
-              {(q.options || []).map((opt, oi) => (
-                <button key={oi} onClick={() => setAnswers(p => ({ ...p, [qi]: opt }))}
-                  className={`w-full text-left px-3.5 py-2.5 rounded-xl border text-sm transition-all ${answers[qi] === opt ? 'border-blue-500 bg-blue-50 text-blue-700 font-semibold' : 'border-slate-200 hover:border-blue-300'}`}>
-                  <span className="font-bold mr-1.5 text-slate-400">{String.fromCharCode(65 + oi)}.</span>{opt}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-      <div className="p-5 border-t border-slate-100 flex gap-3">
-        <button onClick={reset} className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-medium rounded-xl text-sm transition-colors flex items-center gap-2">
-          <X size={14} /> Cancel
-        </button>
-        <button onClick={handleSubmit} disabled={loading || Object.keys(answers).length < questions.length}
-          className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold rounded-xl text-sm transition-colors flex items-center justify-center gap-2">
-          {loading ? <><Loader2 size={15} className="animate-spin" /> Submitting...</> : <><CheckCircle2 size={15} /> Submit Quiz</>}
-        </button>
-      </div>
-    </div>
-  )
-
-  return (
-    <div className="bg-white rounded-2xl border border-slate-200 p-6">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center">
-          <Sparkles size={18} className="text-blue-600" />
-        </div>
-        <div>
-          <h3 className="font-display font-bold text-slate-800">AI Practice Quiz</h3>
-          <p className="text-slate-400 text-sm">Auto-generate MCQs for any topic</p>
-        </div>
-      </div>
-      <div className="space-y-4">
-        <div>
-          <label className="block text-xs text-slate-500 font-medium mb-1.5">Course *</label>
-          <select className={inputCls} value={form.course_id} onChange={e => set('course_id', e.target.value)}>
-            <option value="">-- Select Course --</option>
-            {enrollments.map(e => <option key={e.course_id} value={e.course_id}>{e.course_name}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs text-slate-500 font-medium mb-1.5">Topic *</label>
-          <input className={inputCls} value={form.topic} onChange={e => set('topic', e.target.value)} placeholder="e.g. Object Oriented Programming, SQL Joins..." />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="block text-xs text-slate-500 font-medium mb-1.5">Difficulty</label>
-            <select className={inputCls} value={form.difficulty} onChange={e => set('difficulty', e.target.value)}>
-              <option value="easy">Easy</option>
-              <option value="medium">Medium</option>
-              <option value="hard">Hard</option>
-            </select>
-          </div>
-          <div>
-            <label className="block text-xs text-slate-500 font-medium mb-1.5">Number of Questions</label>
-            <select className={inputCls} value={form.num_questions} onChange={e => set('num_questions', parseInt(e.target.value))}>
-              {[3, 5, 7, 10].map(n => <option key={n} value={n}>{n} questions</option>)}
-            </select>
-          </div>
-        </div>
-        <button onClick={handleGenerate} disabled={loading || !form.course_id || !form.topic}
-          className="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white font-semibold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm">
-          {loading ? <><Loader2 size={15} className="animate-spin" /> Generating...</> : <><Sparkles size={15} /> Generate Quiz with AI</>}
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ── Main Page ──────────────────────────────────────
-export default function AIAssistantPage() {
-  const [enrollments, setEnrollments] = useState([])
-  const [tab, setTab] = useState('chatbot')
-
-  useEffect(() => {
-    studentAPI.getEnrollments()
-      .then(r => setEnrollments(r.data.data?.enrollments || []))
-      .catch(() => {})
-  }, [])
-
-  return (
-    <div className="space-y-6 max-w-5xl mx-auto">
-      <div>
-        <h1 className="font-display font-bold text-2xl text-slate-800">AI Assistant</h1>
-        <p className="text-slate-400 text-sm mt-0.5">Chatbot support + AI-generated practice quizzes</p>
-      </div>
-
-      <div className="flex gap-1 bg-slate-100 p-1 rounded-xl w-fit">
-        {[['chatbot', '🤖 Chatbot'], ['quiz', '✨ Practice Quiz']].map(([key, label]) => (
-          <button key={key} onClick={() => setTab(key)}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition-all ${tab === key ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
-            {label}
+          {/* Send button */}
+          <button onClick={() => send()}
+            disabled={!input.trim() || loading}
+            style={{
+              width: 44, height: 44, borderRadius: '0.875rem', border: 'none', flexShrink: 0,
+              background: input.trim() && !loading
+                ? 'linear-gradient(145deg, #a78bfa, #7c5cdb)'
+                : 'var(--neu-surface-deep)',
+              boxShadow: input.trim() && !loading
+                ? '5px 5px 14px var(--neu-shadow-dark), -3px -3px 8px var(--neu-shadow-light), 0 4px 16px rgba(167,139,250,0.4)'
+                : 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)',
+              color: input.trim() && !loading ? '#fff' : 'var(--neu-text-ghost)',
+              cursor: input.trim() && !loading ? 'pointer' : 'not-allowed',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'all 0.18s',
+            }}
+            onMouseEnter={e => { if (input.trim() && !loading) e.currentTarget.style.transform = 'translateY(-2px) scale(1.05)' }}
+            onMouseLeave={e => e.currentTarget.style.transform = ''}>
+            {loading
+              ? <Loader2 size={18} style={{ animation: 'spin 0.8s linear infinite' }} />
+              : <Send size={18} style={{ transform: 'translateX(1px)' }} />}
           </button>
-        ))}
-      </div>
+        </div>
 
-      {tab === 'chatbot' && <Chatbot enrollments={enrollments} />}
-      {tab === 'quiz'    && <AIQuizGenerator enrollments={enrollments} />}
+        {/* Hint */}
+        <p style={{ textAlign: 'center', fontSize: '0.65rem', color: 'var(--neu-text-ghost)', padding: '0.3rem 0 0.55rem' }}>
+          Press{' '}
+          <kbd style={{ background: 'var(--neu-surface)', boxShadow: 'var(--neu-raised)', padding: '0.1rem 0.4rem', borderRadius: '0.3rem', fontSize: '0.6rem', fontFamily: 'monospace' }}>Enter</kbd>
+          {' '}to send ·{' '}
+          <kbd style={{ background: 'var(--neu-surface)', boxShadow: 'var(--neu-raised)', padding: '0.1rem 0.4rem', borderRadius: '0.3rem', fontSize: '0.6rem', fontFamily: 'monospace' }}>Shift+Enter</kbd>
+          {' '}for new line
+        </p>
+      </div>
     </div>
   )
 }
