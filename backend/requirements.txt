@@ -32,3 +32,10 @@ dlib==20.0.0
 dlib-bin==20.0.0
 
 cryptography==46.0.5
+
+# ─── AI Chatbot (Gemini + RAG + HuggingFace) ───────────
+google-generativeai>=0.5.0
+sentence-transformers>=2.7.0
+faiss-cpu>=1.7.4
+torch>=2.0.0
+transformers>=4.35.0

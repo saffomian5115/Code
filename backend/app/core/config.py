@@ -18,6 +18,9 @@ class Settings(BaseSettings):
     APP_NAME: str = "AI-Driven Smart LMS"
     DEBUG: bool = True
 
+    # Gemini AI  ← NAYA
+    GEMINI_API_KEY: str = ""
+
     @property
     def DATABASE_URL(self) -> str:
         return (
@@ -27,5 +30,6 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"   # ← NAYA: unknown fields ignore karo
 
 settings = Settings()

@@ -15,7 +15,7 @@ router = APIRouter(tags=["AI Chatbot"])
 
 # ─── CHATBOT ENDPOINTS ──────────────────────────────────
 
-@router.post("/chatbot/message")
+@router.post("/chatbot/chat")
 def send_message(
     request: ChatbotMessageRequest,
     db: Session = Depends(get_db),
