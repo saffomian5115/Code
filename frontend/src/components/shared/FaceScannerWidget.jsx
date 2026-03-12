@@ -2,30 +2,15 @@
 //  FaceScannerWidget.jsx
 //  Path: frontend/src/components/shared/FaceScannerWidget.jsx
 //
+//  FIX: apiCall / onSuccess / onFail ko refs mein store kiya taake
+//       fd.onResults callback hamesha latest version use kare —
+//       yahi woh stale closure bug tha jis ki wajah se 4 mein se
+//       sirf 1 baar capture hota tha.
+//
 //  Ek hi reusable component — teeno jagah use hota hai:
 //    1. Login page  → mode="login"   → 5 attempts, phir band
 //    2. Gate kiosk  → mode="gate"    → hamesha chalta rahe, success card
 //    3. Profile     → mode="enroll"  → jab tak enroll na ho, retry karta rahe
-//
-//  Props:
-//    mode        : "login" | "gate" | "enroll"   ← REQUIRED
-//    apiCall     : async (base64) => axios res    ← REQUIRED
-//    onSuccess   : (data) => void
-//    onFail      : () => void                    ← optional
-//    onClose     : () => void                    ← modal band karne ke liye
-//    title       : string (override)
-//    subtitle    : string (override)
-//    accentColor : string (override)
-//    showCard    : bool   (override)
-//    cardDuration: ms     (override)
-//    scanCooldown: ms     (override)
-//    layout      : 'modal' | 'inline' (override)
-//    theme       : 'light' | 'dark'   (override)
-//
-//  Mode behavior summary:
-//    login  → maxAttempts=5, autoRetry, 5th pe blocked overlay + "Dobara Try" button
-//    gate   → maxAttempts=Infinity, autoRetry, success card 2.2s phir wapas scan
-//    enroll → maxAttempts=Infinity, autoRetry, success pe onSuccess call + close
 // ═══════════════════════════════════════════════════════════════════════
 
 import { useEffect, useRef, useState, useCallback } from 'react'
@@ -85,7 +70,9 @@ function SuccessCard({ data, accentColor, onDone, duration }) {
   }, [onDone, duration])
 
   const imgUrl = data?.profile_picture_url
-    ? `http://127.0.0.1:8000${data.profile_picture_url}`
+    ? (data.profile_picture_url.startsWith('http')
+        ? data.profile_picture_url
+        : `http://127.0.0.1:8000${data.profile_picture_url}`)
     : null
 
   return (
@@ -96,7 +83,6 @@ function SuccessCard({ data, accentColor, onDone, duration }) {
       borderRadius:'inherit', gap:'0.45rem',
       animation:'fsw-fadeIn 0.25s ease both',
     }}>
-      {/* Avatar */}
       <div style={{
         width:78, height:78, borderRadius:'50%',
         border:`3px solid ${accentColor}`,
@@ -110,7 +96,6 @@ function SuccessCard({ data, accentColor, onDone, duration }) {
           : <UserCheck size={30} color={accentColor} />
         }
       </div>
-      {/* Green check */}
       <div style={{
         width:32, height:32, borderRadius:'50%', background:'#22d3a5',
         display:'flex', alignItems:'center', justifyContent:'center',
@@ -148,7 +133,7 @@ function SuccessCard({ data, accentColor, onDone, duration }) {
 }
 
 // ══════════════════════════════════════════════════════════════════════
-//  FailOverlay — scanning fail pe message
+//  FailOverlay
 // ══════════════════════════════════════════════════════════════════════
 function FailOverlay({ attempts, maxAttempts, mode }) {
   const remaining = maxAttempts === Infinity ? null : maxAttempts - attempts
@@ -229,12 +214,11 @@ function MaxAttemptsOverlay({ onClose, onRetry, accentColor }) {
 //  FaceScannerWidget — main export
 // ══════════════════════════════════════════════════════════════════════
 export default function FaceScannerWidget({
-  mode,           // "login" | "gate" | "enroll"  ← REQUIRED
-  apiCall,        //  async (base64) => axios res  ← REQUIRED
+  mode,
+  apiCall,
   onSuccess,
   onFail,
   onClose,
-  // Optional overrides (mode defaults use honge agar nahi diye)
   title,
   subtitle,
   accentColor,
@@ -253,23 +237,37 @@ export default function FaceScannerWidget({
   const THM  = theme        ?? cfg.theme
   const TTL  = title        ?? cfg.title
   const SUB  = subtitle     ?? cfg.subtitle
-  const MAX  = cfg.maxAttempts  // 5 | Infinity
+  const MAX  = cfg.maxAttempts
   const RDLY = cfg.retryDelay
 
-  // ── Refs ────────────────────────────────────────────────────────────
+  // ── DOM Refs ─────────────────────────────────────────────────────────
   const videoRef      = useRef(null)
   const overlayRef    = useRef(null)
   const capCanvasRef  = useRef(null)
   const streamRef     = useRef(null)
   const detectorRef   = useRef(null)
   const loopRef       = useRef(null)
+
+  // ── Mutable Refs (no re-render needed) ───────────────────────────────
   const processingRef = useRef(false)
   const lastScanRef   = useRef(0)
   const statusRef     = useRef('loading')
   const mountedRef    = useRef(true)
   const attemptsRef   = useRef(0)
 
-  // ── State ───────────────────────────────────────────────────────────
+  // ── FIX: Keep latest prop callbacks in refs ───────────────────────────
+  // Yeh teen refs ki wajah se fd.onResults callback kabhi stale nahi hoga
+  // chahe kitni baar bhi component re-render ho ya naya apiCall prop aaye
+  const apiCallRef   = useRef(apiCall)
+  const onSuccessRef = useRef(onSuccess)
+  const onFailRef    = useRef(onFail)
+
+  // Har render pe refs update karo (no stale closures)
+  useEffect(() => { apiCallRef.current   = apiCall   }, [apiCall])
+  useEffect(() => { onSuccessRef.current = onSuccess }, [onSuccess])
+  useEffect(() => { onFailRef.current    = onFail    }, [onFail])
+
+  // ── State ─────────────────────────────────────────────────────────────
   const [status,      setStatusState] = useState('loading')
   const [successData, setSuccessData] = useState(null)
   const [camError,    setCamError]    = useState(null)
@@ -282,7 +280,7 @@ export default function FaceScannerWidget({
     setStatusState(s)
   }, [])
 
-  // ── Cleanup ─────────────────────────────────────────────────────────
+  // ── Cleanup ───────────────────────────────────────────────────────────
   const stopAll = useCallback(() => {
     if (loopRef.current)  cancelAnimationFrame(loopRef.current)
     try { detectorRef.current?.close() } catch (_) {}
@@ -297,7 +295,7 @@ export default function FaceScannerWidget({
     return () => { mountedRef.current = false; stopAll() }
   }, [stopAll])
 
-  // ── Draw corner brackets ─────────────────────────────────────────────
+  // ── Draw corner brackets ──────────────────────────────────────────────
   const drawOverlay = useCallback((faces, col) => {
     const cv = overlayRef.current
     if (!cv) return
@@ -320,7 +318,7 @@ export default function FaceScannerWidget({
     ctx.stroke()
   }, [])
 
-  // ── Capture face crop ────────────────────────────────────────────────
+  // ── Capture face crop ─────────────────────────────────────────────────
   const captureFace = useCallback((box) => {
     const video = videoRef.current
     const cap   = capCanvasRef.current
@@ -338,7 +336,10 @@ export default function FaceScannerWidget({
     return cap.toDataURL('image/jpeg', 0.92)
   }, [])
 
-  // ── On face detected → try scan ──────────────────────────────────────
+  // ── On face detected → try scan ───────────────────────────────────────
+  // FIX: apiCall, onSuccess, onFail direct use nahi karte — refs se lete hain
+  // Isliye yeh function kabhi stale nahi hoga, dependencies mein sirf
+  // stable values hain (refs, COOL, CARD, MAX, RDLY, captureFace, setStatus)
   const onFaceDetected = useCallback(async (box) => {
     if (processingRef.current)            return
     if (statusRef.current !== 'scanning') return
@@ -353,10 +354,10 @@ export default function FaceScannerWidget({
     setStatus('processing')
 
     try {
-      const res  = await apiCall(base64)
+      // ← ref se latest apiCall lo, stale closure nahi hogi
+      const res  = await apiCallRef.current(base64)
       const data = res?.data?.data
 
-      // enroll → check res.data.success; gate/login → check data.matched
       const isSuccess = mode === 'enroll'
         ? (res?.data?.success !== false)
         : (data?.matched !== false && res?.data?.success !== false)
@@ -365,23 +366,19 @@ export default function FaceScannerWidget({
         setSuccessData(data ?? res?.data)
         setStatus('success')
         if (!CARD) {
-          // login / enroll — seedha callback, component band hoga
-          onSuccess?.(data ?? res?.data)
+          // login / enroll — seedha callback
+          onSuccessRef.current?.(data ?? res?.data)
         }
-        // gate — SuccessCard dikhega, handleCardDone pe callback
       } else {
-        // ── FAIL ──────────────────────────────────────────────────
         const n = attemptsRef.current + 1
         attemptsRef.current = n
         setAttempts(n)
-        onFail?.()
+        onFailRef.current?.()
         setStatus('fail')
 
         if (MAX !== Infinity && n >= MAX) {
-          // Login: max attempts exhausted
           setMaxed(true)
         } else {
-          // gate / enroll: auto retry
           setTimeout(() => { if (mountedRef.current) setStatus('scanning') }, RDLY)
         }
       }
@@ -389,7 +386,7 @@ export default function FaceScannerWidget({
       const n = attemptsRef.current + 1
       attemptsRef.current = n
       setAttempts(n)
-      onFail?.()
+      onFailRef.current?.()
       setStatus('fail')
       if (MAX !== Infinity && n >= MAX) {
         setMaxed(true)
@@ -399,23 +396,24 @@ export default function FaceScannerWidget({
     } finally {
       processingRef.current = false
     }
-  }, [apiCall, mode, onSuccess, onFail, COOL, CARD, MAX, RDLY, captureFace, setStatus])
+  }, [mode, COOL, CARD, MAX, RDLY, captureFace, setStatus])
+  //   ↑ apiCall, onSuccess, onFail yahan nahi hain — refs handle karte hain
 
-  // ── Gate: success card done → reset + continue scanning ─────────────
+  // ── Gate: success card done → reset + continue ───────────────────────
   const handleCardDone = useCallback(() => {
-    onSuccess?.(successData)
+    onSuccessRef.current?.(successData)
     setSuccessData(null)
     setStatus('scanning')
-  }, [onSuccess, successData, setStatus])
+  }, [successData, setStatus])
 
-  // ── Boot MediaPipe ───────────────────────────────────────────────────
+  // ── Boot MediaPipe ────────────────────────────────────────────────────
   const boot = useCallback(async () => {
     stopAll()
     setStatus('loading')
     setCamError(null)
     setMaxed(false)
     setSuccessData(null)
-    attemptsRef.current = 0
+    attemptsRef.current   = 0
     setAttempts(0)
     processingRef.current = false
     lastScanRef.current   = 0
@@ -441,6 +439,10 @@ export default function FaceScannerWidget({
 
       const fd = new FaceDetection({ locateFile: f => `/node_modules/@mediapipe/face_detection/${f}` })
       fd.setOptions({ model: 'short', minDetectionConfidence: 0.6 })
+
+      // ── FIX: onResults mein onFaceDetected directly call karte hain ──
+      // onFaceDetected ab stable hai (refs ki wajah se) isliye
+      // fd.onResults ko dobara register karne ki zaroorat nahi
       fd.onResults(results => {
         if (!mountedRef.current) return
         const faces = results.detections ?? []
@@ -448,6 +450,7 @@ export default function FaceScannerWidget({
         drawOverlay(faces, col)
         if (faces.length === 1) onFaceDetected(faces[0].boundingBox)
       })
+
       detectorRef.current = fd
       setStatus('scanning')
 
@@ -459,26 +462,32 @@ export default function FaceScannerWidget({
       tick()
 
     } catch (err) {
-      if (mountedRef.current) { setCamError(err.message || 'Camera access nahi mila'); setStatus('fail') }
+      if (mountedRef.current) {
+        setCamError(err.message || 'Camera access nahi mila')
+        setStatus('fail')
+      }
     }
   }, [ACC, drawOverlay, onFaceDetected, setStatus, stopAll])
 
-  // ── Canvas resize sync ───────────────────────────────────────────────
+  // ── Canvas resize sync ────────────────────────────────────────────────
   useEffect(() => {
     const video = videoRef.current, canvas = overlayRef.current
     if (!video || !canvas) return
-    const sync = () => { canvas.width = video.videoWidth || 640; canvas.height = video.videoHeight || 480 }
+    const sync = () => {
+      canvas.width  = video.videoWidth  || 640
+      canvas.height = video.videoHeight || 480
+    }
     video.addEventListener('loadedmetadata', sync)
     return () => video.removeEventListener('loadedmetadata', sync)
   }, [])
 
-  // ── Boot on mount ────────────────────────────────────────────────────
+  // ── Boot on mount ─────────────────────────────────────────────────────
   useEffect(() => {
     boot()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Theme vars ───────────────────────────────────────────────────────
+  // ── Theme vars ────────────────────────────────────────────────────────
   const isDark = THM === 'dark'
   const surf   = isDark ? '#161c26'               : '#ffffff'
   const border = isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.09)'
@@ -488,8 +497,8 @@ export default function FaceScannerWidget({
     ? '10px 10px 26px rgba(0,0,0,.6), -3px -3px 10px rgba(255,255,255,.04)'
     : '8px 8px 20px rgba(0,0,0,.12), -4px -4px 10px rgba(255,255,255,.9)'
 
-  // ── Status bar label ─────────────────────────────────────────────────
-  const attemptStr = MAX !== Infinity ? ` (${attempts}/${MAX})` : ''
+  // ── Status bar ────────────────────────────────────────────────────────
+  const attemptStr  = MAX !== Infinity ? ` (${attempts}/${MAX})` : ''
   const statusLabel = {
     loading:    '⏳ Camera shuru ho rahi hai…',
     scanning:   `🎯 Scanning${attemptStr}…`,
@@ -502,7 +511,7 @@ export default function FaceScannerWidget({
     loading:'#fbbf24', scanning:ACC, processing:'#a78bfa', success:'#22d3a5', fail:'#f87171',
   }[status] ?? txtMut
 
-  // ── Ring border/shadow ────────────────────────────────────────────────
+  // ── Ring ──────────────────────────────────────────────────────────────
   const ringBorder = status === 'success' ? '2.5px solid #22d3a5'
     : status === 'fail'     ? '2.5px solid #f87171'
     : status === 'scanning' ? `2.5px solid ${ACC}`
@@ -523,7 +532,6 @@ export default function FaceScannerWidget({
       <style>{`
         @keyframes fsw-spin      { to { transform:rotate(360deg) } }
         @keyframes fsw-scan-line { 0%{ top:0 } 100%{ top:100% } }
-        @keyframes fsw-pulse-dot { 0%,100%{ opacity:.65 } 50%{ opacity:1 } }
         @keyframes fsw-ring-scan { 0%,100%{ transform:scale(1) } 50%{ transform:scale(1.012) } }
         @keyframes fsw-ring-fail { 0%{ box-shadow:0 0 0 0 rgba(248,113,113,.55) } 70%{ box-shadow:0 0 0 14px rgba(248,113,113,0) } 100%{ box-shadow:0 0 0 0 rgba(248,113,113,0) } }
         @keyframes fsw-fadeIn    { from{ opacity:0; transform:scale(.93) } to{ opacity:1; transform:scale(1) } }
@@ -531,7 +539,7 @@ export default function FaceScannerWidget({
         @keyframes fsw-pulse     { 0%,100%{ box-shadow:0 0 0 0 ${ACC}44 } 50%{ box-shadow:0 0 0 12px ${ACC}00 } }
       `}</style>
 
-      {/* ── Header ──────────────────────────────────────────────── */}
+      {/* ── Header ── */}
       <div style={{
         display:'flex', alignItems:'center', justifyContent:'space-between',
         padding:'0.9rem 1.15rem 0.8rem',
@@ -561,7 +569,7 @@ export default function FaceScannerWidget({
         )}
       </div>
 
-      {/* ── Camera area ─────────────────────────────────────────── */}
+      {/* ── Camera area ── */}
       <div style={{
         position:'relative', background:'#0a0e1a', aspectRatio:'4/3',
         border: ringBorder, boxShadow: ringGlow,
@@ -570,7 +578,6 @@ export default function FaceScannerWidget({
           : status === 'fail' && !maxed   ? 'fsw-ring-fail 0.6s ease-out'
           : 'none',
       }}>
-
         <video ref={videoRef}
           style={{ width:'100%', height:'100%', objectFit:'cover', transform:'scaleX(-1)', display:'block' }}
           playsInline muted />
@@ -623,70 +630,62 @@ export default function FaceScannerWidget({
           <MaxAttemptsOverlay
             accentColor={ACC}
             onRetry={boot}
-            onClose={onClose ? () => { stopAll(); onClose() } : null}
+            onClose={onClose ? () => { stopAll(); onClose() } : undefined}
           />
         )}
 
         {/* Success card — gate mode */}
-        {status === 'success' && successData && CARD && (
-          <SuccessCard data={successData} accentColor={ACC} onDone={handleCardDone} duration={CDUR} />
+        {status === 'success' && CARD && successData && (
+          <SuccessCard
+            data={successData}
+            accentColor={ACC}
+            onDone={handleCardDone}
+            duration={CDUR}
+          />
         )}
 
         {/* Camera error */}
-        {camError && !maxed && (
+        {camError && status === 'fail' && (
           <div style={{
-            position:'absolute', inset:0, display:'flex', flexDirection:'column',
-            alignItems:'center', justifyContent:'center', gap:'0.5rem',
-            background:'#0a0e1a', padding:'1rem', textAlign:'center',
+            position:'absolute', bottom:'0.6rem', left:0, right:0,
+            textAlign:'center', fontSize:'0.68rem', color:'#f87171',
           }}>
-            <AlertCircle size={26} color="#f87171" />
-            <p style={{ color:'#f87171', fontSize:'0.78rem', fontWeight:600, margin:0 }}>Camera Error</p>
-            <p style={{ color:'#64748b', fontSize:'0.68rem', margin:0 }}>{camError}</p>
-            <button onClick={boot} style={{
-              marginTop:'0.5rem', padding:'0.38rem 0.95rem', borderRadius:'0.7rem',
-              border:`1px solid ${ACC}44`, background:`${ACC}12`,
-              color:ACC, cursor:'pointer', fontSize:'0.74rem', fontWeight:600,
-              display:'flex', alignItems:'center', gap:'0.3rem',
-            }}>
-              <RefreshCw size={12} /> Dobara Try Karo
-            </button>
+            {camError}
           </div>
         )}
+      </div>
 
-        {/* Status bar (bottom of camera) */}
-        {!camError && (
+      {/* ── Status bar ── */}
+      <div style={{
+        padding:'0.6rem 1rem',
+        display:'flex', alignItems:'center', justifyContent:'space-between',
+        borderTop:`1px solid ${border}`,
+        background: isDark ? '#1c2333' : surf,
+      }}>
+        <p style={{ fontSize:'0.72rem', color:statusColor, margin:0, fontWeight:600 }}>
+          {statusLabel}
+        </p>
+        {/* Pulse dot */}
+        {status === 'scanning' && (
           <div style={{
-            position:'absolute', bottom:0, left:0, right:0,
-            background:'linear-gradient(to top, rgba(0,0,0,.8), transparent)',
-            padding:'1.1rem 1rem 0.6rem',
-            display:'flex', alignItems:'center', gap:'0.45rem',
-          }}>
-            <span style={{
-              width:6, height:6, borderRadius:'50%', background:statusColor, flexShrink:0,
-              animation: status === 'scanning' ? 'fsw-pulse-dot 1.5s ease-in-out infinite' : 'none',
-            }} />
-            <span style={{ fontSize:'0.74rem', color: status === 'fail' ? '#f87171' : '#fff', fontWeight:600 }}>
-              {statusLabel}
-            </span>
-          </div>
+            width:8, height:8, borderRadius:'50%', background:ACC,
+            animation:'fsw-pulse 1.4s ease-in-out infinite',
+          }} />
         )}
       </div>
     </div>
   )
 
-  if (LAY === 'modal') {
-    return (
-      <div
-        style={{
-          position:'fixed', inset:0, zIndex:999,
-          background:'rgba(0,0,0,0.65)', backdropFilter:'blur(6px)',
-          display:'flex', alignItems:'center', justifyContent:'center', padding:'1rem',
-        }}
-        onClick={e => { if (e.target === e.currentTarget) { stopAll(); onClose?.() } }}
-      >
-        {inner}
-      </div>
-    )
-  }
-  return inner
+  // ── Layout: modal vs inline ───────────────────────────────────────────
+  if (LAY === 'inline') return inner
+
+  return (
+    <div style={{
+      position:'fixed', inset:0, zIndex:999,
+      background:'rgba(8,12,20,0.80)', backdropFilter:'blur(8px)',
+      display:'flex', alignItems:'center', justifyContent:'center', padding:'1rem',
+    }}>
+      {inner}
+    </div>
+  )
 }

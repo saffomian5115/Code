@@ -1,10 +1,10 @@
 // ═══════════════════════════════════════════════════════════════
 //  ProfilePage.jsx  —  Neumorphic Premium Profile
 //  Replace:  frontend/src/pages/shared/ProfilePage.jsx
-//  (Saara original logic same — sirf UI premium hua)
+//  CHANGE: FaceEnrollModal → FaceScannerWidget mode="enroll"
 // ═══════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   User, Mail, Phone, MapPin, Calendar, Shield,
   Camera, Edit3, Save, X, Loader2, BadgeCheck,
@@ -13,7 +13,7 @@ import {
 import toast from "react-hot-toast";
 import { authAPI } from "../../api/auth.api";
 import { authStore } from "../../store/authStore";
-import FaceEnrollModal from "../../components/shared/FaceEnrollModal";
+import FaceScannerWidget from "../../components/shared/FaceScannerWidget";
 
 const BASE_URL = "http://127.0.0.1:8000";
 
@@ -69,11 +69,11 @@ function PwdField({ label, fieldKey, showKey, form, set, show, toggleShow }) {
       <div style={{ position: "relative" }}>
         <input
           type={show[showKey] ? "text" : "password"}
-          value={form[fieldKey]}
-          onChange={(e) => set(fieldKey, e.target.value)}
+          value={form[fieldKey] || ""}
+          onChange={e => set(p => ({ ...p, [fieldKey]: e.target.value }))}
           className="neu-input-rect"
+          style={{ borderRadius: "0.875rem", paddingRight: "3rem" }}
           placeholder="••••••••"
-          style={{ paddingRight: "2.75rem" }}
         />
         <button
           type="button"
@@ -82,11 +82,8 @@ function PwdField({ label, fieldKey, showKey, form, set, show, toggleShow }) {
             position: "absolute", right: "0.9rem", top: "50%",
             transform: "translateY(-50%)",
             background: "none", border: "none", cursor: "pointer",
-            color: "var(--neu-text-ghost)", display: "flex",
-            transition: "color 0.15s",
+            color: "var(--neu-text-ghost)", padding: "0.2rem",
           }}
-          onMouseEnter={e => e.currentTarget.style.color = "var(--neu-accent)"}
-          onMouseLeave={e => e.currentTarget.style.color = "var(--neu-text-ghost)"}
         >
           {show[showKey] ? <EyeOff size={15} /> : <Eye size={15} />}
         </button>
@@ -99,33 +96,23 @@ function PwdField({ label, fieldKey, showKey, form, set, show, toggleShow }) {
 //  Change Password Modal
 // ─────────────────────────────────────────────────────────────
 function ChangePasswordModal({ onClose }) {
-  const [form, setForm] = useState({ current_password: "", new_password: "", confirm_password: "" });
-  const [show, setShow] = useState({ current: false, new: false, confirm: false });
+  const [form, setForm] = useState({ old_password: "", new_password: "", confirm_password: "" });
+  const [show, setShow] = useState({});
   const [loading, setLoading] = useState(false);
 
-  const set        = (k, v) => setForm(p => ({ ...p, [k]: v }));
-  const toggleShow = (k)    => setShow(p => ({ ...p, [k]: !p[k] }));
+  const toggleShow = (key) => setShow(p => ({ ...p, [key]: !p[key] }));
 
   const handleSubmit = async () => {
-    if (!form.current_password || !form.new_password || !form.confirm_password) {
-      toast.error("Sab fields required hain"); return;
-    }
-    if (form.new_password.length < 8) {
-      toast.error("New password kam az kam 8 characters ka hona chahiye"); return;
-    }
     if (form.new_password !== form.confirm_password) {
-      toast.error("Passwords match nahi karte"); return;
+      toast.error("New passwords match nahi hain"); return;
     }
-    if (form.current_password === form.new_password) {
-      toast.error("New password old se alag hona chahiye"); return;
-    }
-    setLoading(true);
     try {
-      await authAPI.changePassword({ current_password: form.current_password, new_password: form.new_password });
+      setLoading(true);
+      await authAPI.changePassword({ old_password: form.old_password, new_password: form.new_password });
       toast.success("Password change ho gaya!");
       onClose();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Password change failed");
+      toast.error(err.response?.data?.message || "Password change fail ho gaya");
     } finally {
       setLoading(false);
     }
@@ -134,50 +121,28 @@ function ChangePasswordModal({ onClose }) {
   return (
     <div style={{
       position: "fixed", inset: 0,
-      background: "rgba(10,14,22,0.55)",
-      backdropFilter: "blur(8px)",
-      zIndex: 50,
-      display: "flex", alignItems: "center", justifyContent: "center",
-      padding: "1rem",
+      background: "rgba(8,12,20,0.75)", backdropFilter: "blur(8px)",
+      zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem",
     }}>
-      <div className="neu-card-lg neu-animate-slide-up" style={{ width: "100%", maxWidth: "400px", padding: "2rem" }}>
-        {/* Header */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "1.5rem" }}>
+      <div className="neu-card-lg" style={{ width: "100%", maxWidth: "420px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "1.25rem 1.5rem", borderBottom: "1px solid var(--neu-border-inner)" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <div style={{
-              width: "2.5rem", height: "2.5rem", borderRadius: "0.875rem",
-              background: "linear-gradient(145deg, rgba(91,138,240,0.2), rgba(91,138,240,0.08))",
-              boxShadow: "var(--neu-raised)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-            }}>
-              <KeyRound size={16} style={{ color: "var(--neu-accent)" }} />
+            <div style={{ width: "2.2rem", height: "2.2rem", borderRadius: "0.6rem", background: "rgba(91,138,240,0.12)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <KeyRound size={15} style={{ color: "#5b8af0" }} />
             </div>
-            <h2 className="neu-heading" style={{ fontSize: "1rem" }}>Change Password</h2>
+            <p className="neu-heading" style={{ fontSize: "0.95rem" }}>Password Change Karo</p>
           </div>
-          <button
-            onClick={onClose}
-            className="neu-btn-icon"
-            style={{ width: "2rem", height: "2rem", borderRadius: "0.625rem" }}
-          >
-            <X size={14} />
-          </button>
+          <button onClick={onClose} className="neu-icon-btn"><X size={16} /></button>
         </div>
-
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <PwdField label="Current Password" fieldKey="current_password" showKey="current" form={form} set={set} show={show} toggleShow={toggleShow} />
-          <PwdField label="New Password"     fieldKey="new_password"     showKey="new"     form={form} set={set} show={show} toggleShow={toggleShow} />
-          <PwdField label="Confirm Password" fieldKey="confirm_password" showKey="confirm" form={form} set={set} show={show} toggleShow={toggleShow} />
-        </div>
-
-        <div style={{ display: "flex", gap: "0.75rem", marginTop: "1.5rem" }}>
-          <button onClick={onClose} className="neu-btn" style={{ flex: 1, padding: "0.75rem" }}>
-            Cancel
-          </button>
+        <div style={{ padding: "1.5rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <PwdField label="Current Password" fieldKey="old_password"     showKey="old"  form={form} set={setForm} show={show} toggleShow={toggleShow} />
+          <PwdField label="New Password"     fieldKey="new_password"     showKey="new"  form={form} set={setForm} show={show} toggleShow={toggleShow} />
+          <PwdField label="Confirm Password" fieldKey="confirm_password"  showKey="conf" form={form} set={setForm} show={show} toggleShow={toggleShow} />
           <button
             onClick={handleSubmit}
             disabled={loading}
             className="neu-btn neu-btn-accent"
-            style={{ flex: 1, padding: "0.75rem", opacity: loading ? 0.75 : 1 }}
+            style={{ width: "100%", padding: "0.75rem", fontSize: "0.85rem", opacity: loading ? 0.75 : 1 }}
           >
             {loading
               ? <span style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Updating...</span>
@@ -255,257 +220,229 @@ export default function ProfilePage() {
       setProfile(updated);
       authStore.updateUser({ full_name: updated.full_name, profile_picture_url: updated.profile_picture_url });
       setEditing(false);
-      toast.success("Profile update ho gaya!");
-    } catch { toast.error("Update failed"); }
-    finally { setSaving(false); }
+      toast.success("Profile update ho gaya! ✅");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Update fail ho gaya");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handlePictureChange = async (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (!file) return;
     try {
       setUploadingPic(true);
-      const res = await authAPI.uploadProfilePicture(file);
-      const { profile_picture_url } = res.data.data;
-      setProfile(p => ({ ...p, profile_picture_url }));
-      authStore.updateUser({ profile_picture_url });
-      window.dispatchEvent(new Event("profileUpdated"));
-      toast.success("Photo update ho gaya!");
-    } catch (err) { toast.error(err.response?.data?.message || "Upload failed"); }
-    finally { setUploadingPic(false); }
+      const res     = await authAPI.uploadProfilePicture(file);
+      const updated = res.data.data;
+      setProfile(p => ({ ...p, profile_picture_url: updated.profile_picture_url }));
+      authStore.updateUser({ profile_picture_url: updated.profile_picture_url });
+      toast.success("Picture update ho gaya! 📸");
+    } catch {
+      toast.error("Picture upload fail ho gaya");
+    } finally {
+      setUploadingPic(false);
+    }
   };
 
-  const avatarUrl = profile?.profile_picture_url ? `${BASE_URL}${profile.profile_picture_url}` : null;
-  const rc        = ROLE_CONFIG[profile?.role] || ROLE_CONFIG.student;
+  // ── Face enroll API call (passed to FaceScannerWidget) ────
+  const enrollApiCall = useCallback(async (base64) => {
+    return await authAPI.enrollFace(base64);
+  }, []);
 
-  // Edit fields per role
-  const editFields = [
-    { key: "full_name",       label: "Full Name",     show: true },
-    { key: "phone",           label: "Phone",         show: true },
-    { key: "city",            label: "City",          show: profile?.role === "student" },
-    { key: "current_address", label: "Address",       show: profile?.role === "student" },
-    { key: "designation",     label: "Designation",   show: ["teacher","admin"].includes(profile?.role) },
-    { key: "qualification",   label: "Qualification", show: profile?.role === "teacher" },
-    { key: "specialization",  label: "Specialization",show: profile?.role === "teacher" },
-  ].filter(f => f.show);
+  // ── On face enroll success ────────────────────────────────
+  const handleEnrollSuccess = useCallback(() => {
+    setFaceEnrolled(true);
+    setShowFaceEnroll(false);
+    toast.success("Face enroll ho gaya! ✅");
+  }, []);
 
-  if (loading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "16rem" }}>
-      <div style={{
-        width: "3.5rem", height: "3.5rem", borderRadius: "50%",
-        background: "var(--neu-surface)", boxShadow: "var(--neu-raised-md)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-      }}>
-        <Loader2 size={22} style={{ color: "var(--neu-accent)", animation: "spin 1s linear infinite" }} />
+  if (loading) {
+    return (
+      <div style={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Loader2 size={32} style={{ animation: "spin 1s linear infinite", color: "var(--neu-accent)" }} />
       </div>
-    </div>
-  );
+    );
+  }
+
+  const rc = ROLE_CONFIG[profile?.role] || ROLE_CONFIG.student;
+
+  const picUrl = profile?.profile_picture_url
+    ? (profile.profile_picture_url.startsWith("http")
+        ? profile.profile_picture_url
+        : `${BASE_URL}${profile.profile_picture_url}`)
+    : null;
+
+  const editFields = [
+    { key: "full_name",       label: "Full Name"      },
+    { key: "phone",           label: "Phone"          },
+    { key: "city",            label: "City"           },
+    { key: "current_address", label: "Address"        },
+    { key: "designation",     label: "Designation"    },
+    { key: "qualification",   label: "Qualification"  },
+    { key: "specialization",  label: "Specialization" },
+  ];
 
   return (
-    <div style={{ maxWidth: "720px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+    <div className="neu-page-bg" style={{ minHeight: "100vh", padding: "2rem 1rem" }}>
+      <div style={{ maxWidth: "760px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
 
-      {/* ── Header Card ── */}
-      <div className="neu-card-lg neu-animate-slide-up" style={{ overflow: "hidden", padding: 0 }}>
+        {/* ── Header Card ── */}
+        <div className="neu-card-lg" style={{ padding: "1.75rem" }}>
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "1.25rem", flexWrap: "wrap" }}>
 
-        {/* Accent banner */}
-        <div style={{
-          height: "5rem",
-          background: `linear-gradient(135deg, ${rc.accent}cc, ${rc.accent}66)`,
-          position: "relative",
-          overflow: "hidden",
-        }}>
-          {/* Decorative circles */}
-          <div style={{ position: "absolute", top: "-1.5rem", right: "-1.5rem", width: "7rem", height: "7rem", borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
-          <div style={{ position: "absolute", bottom: "-1rem", left: "30%", width: "4rem", height: "4rem", borderRadius: "50%", background: "rgba(255,255,255,0.06)" }} />
-        </div>
-
-        <div style={{ padding: "0 1.75rem 1.75rem" }}>
-          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", marginTop: "-2.5rem", flexWrap: "wrap", gap: "1rem" }}>
-
-            {/* Avatar group */}
-            <div style={{ display: "flex", alignItems: "flex-end", gap: "1rem" }}>
-              {/* Avatar */}
-              <div style={{ position: "relative" }}>
-                <div style={{
-                  width: "5rem", height: "5rem",
-                  borderRadius: "1.25rem",
-                  background: rc.bg,
-                  boxShadow: "var(--neu-raised-md)",
-                  border: `3px solid var(--neu-surface)`,
-                  overflow: "hidden",
+            {/* Avatar */}
+            <div style={{ position: "relative", flexShrink: 0 }}>
+              <div style={{
+                width: "5rem", height: "5rem", borderRadius: "1.25rem",
+                background: "linear-gradient(145deg, var(--neu-surface), var(--neu-surface-deep))",
+                boxShadow: "var(--neu-raised)",
+                border: "2px solid var(--neu-border)",
+                overflow: "hidden",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {picUrl
+                  ? <img src={picUrl} alt="profile" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : <User size={28} style={{ color: "var(--neu-text-ghost)" }} />
+                }
+              </div>
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingPic}
+                style={{
+                  position: "absolute", bottom: "-6px", right: "-6px",
+                  width: "1.6rem", height: "1.6rem", borderRadius: "0.5rem",
+                  background: "var(--neu-accent)",
+                  border: "2px solid var(--neu-surface)",
                   display: "flex", alignItems: "center", justifyContent: "center",
-                  color: rc.accent,
-                  fontFamily: "'Outfit',sans-serif",
-                  fontWeight: 800, fontSize: "1.75rem",
-                }}>
-                  {avatarUrl
-                    ? <img src={avatarUrl} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    : <span>{profile?.full_name?.[0]?.toUpperCase() || "?"}</span>
-                  }
-                </div>
+                  cursor: uploadingPic ? "not-allowed" : "pointer",
+                  boxShadow: "var(--neu-raised)",
+                }}
+              >
+                {uploadingPic
+                  ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite", color: "#fff" }} />
+                  : <Camera size={11} style={{ color: "#fff" }} />
+                }
+              </button>
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: "none" }} onChange={handlePictureChange} />
+            </div>
 
-                {/* Camera upload button */}
-                <button
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploadingPic}
-                  className="neu-press-btn"
-                  style={{
-                    position: "absolute", bottom: "-6px", right: "-6px",
-                    width: "1.85rem", height: "1.85rem",
-                    background: `linear-gradient(145deg, ${rc.accent}, ${rc.accent}bb)`,
-                    boxShadow: `0 4px 0 ${rc.accent}55, 0 6px 10px -4px rgba(0,0,0,0.3)`,
-                    border: "2px solid var(--neu-surface)",
-                    color: "#fff",
-                    borderRadius: "0.5rem",
-                  }}
-                >
-                  {uploadingPic
-                    ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite" }} />
-                    : <Camera size={11} />
-                  }
-                </button>
-                <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" style={{ display: "none" }} onChange={handlePictureChange} />
+            {/* Name + role */}
+            <div style={{ flex: 1, minWidth: 0, paddingBottom: "0.25rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
+                <h1 className="neu-heading" style={{ fontSize: "1.3rem" }}>{profile?.full_name}</h1>
+                {profile?.is_active && (
+                  <span style={{
+                    display: "inline-flex", alignItems: "center", gap: "3px",
+                    padding: "0.2rem 0.55rem",
+                    background: "rgba(62,207,142,0.12)", color: "#22a06b",
+                    borderRadius: "9999px", fontSize: "0.68rem", fontWeight: 700,
+                  }}>
+                    <BadgeCheck size={11} /> Active
+                  </span>
+                )}
               </div>
-
-              {/* Name + role */}
-              <div style={{ paddingBottom: "0.25rem" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                  <h1 className="neu-heading" style={{ fontSize: "1.3rem" }}>{profile?.full_name}</h1>
-                  {profile?.is_active && (
-                    <span style={{
-                      display: "inline-flex", alignItems: "center", gap: "3px",
-                      padding: "0.2rem 0.55rem",
-                      background: "rgba(62,207,142,0.12)",
-                      color: "#22a06b",
-                      borderRadius: "9999px",
-                      fontSize: "0.68rem", fontWeight: 700,
-                    }}>
-                      <BadgeCheck size={11} /> Active
-                    </span>
-                  )}
-                </div>
-                <p className="neu-subtext" style={{ marginTop: "2px", fontSize: "0.8rem" }}>{profile?.email}</p>
-
-                {/* Role badge */}
-                <span style={{
-                  display: "inline-block", marginTop: "0.4rem",
-                  padding: "0.2rem 0.65rem",
-                  background: rc.bg,
-                  color: rc.accent,
-                  borderRadius: "9999px",
-                  fontSize: "0.7rem", fontWeight: 700,
-                  textTransform: "capitalize",
-                  border: `1px solid ${rc.accent}30`,
-                }}>
-                  {rc.label}
-                </span>
-              </div>
+              <p className="neu-subtext" style={{ marginTop: "2px", fontSize: "0.8rem" }}>{profile?.email}</p>
+              <span style={{
+                display: "inline-block", marginTop: "0.4rem",
+                padding: "0.2rem 0.65rem",
+                background: rc.bg, color: rc.accent,
+                borderRadius: "9999px", fontSize: "0.7rem", fontWeight: 700,
+                textTransform: "capitalize", border: `1px solid ${rc.accent}30`,
+              }}>
+                {rc.label}
+              </span>
             </div>
 
             {/* Action buttons */}
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", alignItems: "center" }}>
-              {/* Face enroll */}
+
+              {/* Face Enroll button */}
               <button
                 onClick={() => setShowFaceEnroll(true)}
                 className="neu-btn"
                 style={{
-                  padding: "0.55rem 1rem",
-                  fontSize: "0.78rem",
-                  gap: "0.4rem",
+                  padding: "0.55rem 1rem", fontSize: "0.78rem", gap: "0.4rem",
                   color: faceEnrolled ? "#22a06b" : "var(--neu-text-secondary)",
                   borderColor: faceEnrolled ? "rgba(62,207,142,0.3)" : "var(--neu-border)",
+                  display: "flex", alignItems: "center",
                 }}
               >
                 <ScanFace size={14} />
-                {faceEnrolled ? "✓ Face Enrolled" : "Add Face Login"}
+                {faceEnrolled ? "Face Enrolled ✓" : "Face Enroll Karo"}
               </button>
 
-              {/* Change password */}
-              <button
-                onClick={() => setShowChangePwd(true)}
-                className="neu-btn"
-                style={{ padding: "0.55rem 1rem", fontSize: "0.78rem", gap: "0.4rem" }}
-              >
-                <KeyRound size={14} /> Password
-              </button>
-
-              {/* Edit / Save / Cancel */}
+              {/* Edit / Save */}
               {editing ? (
                 <>
-                  <button
-                    onClick={() => setEditing(false)}
-                    className="neu-btn"
-                    style={{ padding: "0.55rem 1rem", fontSize: "0.78rem", gap: "0.4rem" }}
-                  >
-                    <X size={14} /> Cancel
+                  <button onClick={handleSave} disabled={saving} className="neu-btn neu-btn-accent" style={{ padding: "0.55rem 1rem", fontSize: "0.78rem", gap: "0.4rem", display: "flex", alignItems: "center" }}>
+                    {saving ? <Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> : <Save size={13} />}
+                    Save
                   </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="neu-btn neu-btn-accent"
-                    style={{ padding: "0.55rem 1.1rem", fontSize: "0.78rem", gap: "0.4rem", opacity: saving ? 0.75 : 1 }}
-                  >
-                    {saving
-                      ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> Saving...</>
-                      : <><Save size={13} /> Save</>
-                    }
+                  <button onClick={() => setEditing(false)} className="neu-btn" style={{ padding: "0.55rem 1rem", fontSize: "0.78rem", gap: "0.4rem", display: "flex", alignItems: "center" }}>
+                    <X size={13} /> Cancel
                   </button>
                 </>
               ) : (
-                <button
-                  onClick={() => setEditing(true)}
-                  className="neu-btn neu-btn-accent"
-                  style={{ padding: "0.55rem 1.1rem", fontSize: "0.78rem", gap: "0.4rem" }}
-                >
-                  <Edit3 size={13} /> Edit Profile
+                <button onClick={() => setEditing(true)} className="neu-btn" style={{ padding: "0.55rem 1rem", fontSize: "0.78rem", gap: "0.4rem", display: "flex", alignItems: "center" }}>
+                  <Edit3 size={13} /> Edit
                 </button>
               )}
+
+              {/* Change Password */}
+              <button onClick={() => setShowChangePwd(true)} className="neu-btn" style={{ padding: "0.55rem 1rem", fontSize: "0.78rem", gap: "0.4rem", display: "flex", alignItems: "center" }}>
+                <KeyRound size={13} /> Password
+              </button>
             </div>
           </div>
         </div>
-      </div>
 
-      {/* ── Info / Edit Card ── */}
-      <div className="neu-card-lg neu-animate-slide-up" style={{ padding: "1.75rem", animationDelay: "0.08s" }}>
-        <p style={{
-          fontSize: "0.7rem", fontWeight: 700,
-          color: "var(--neu-text-ghost)",
-          letterSpacing: "0.08em", textTransform: "uppercase",
-          marginBottom: "1rem",
-        }}>
-          {editing ? "Edit Information" : "Personal Information"}
-        </p>
+        {/* ── Info / Edit Card ── */}
+        <div className="neu-card-lg" style={{ padding: "1.75rem" }}>
+          <p className="neu-label" style={{ marginBottom: "1rem", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--neu-text-muted)" }}>
+            {editing ? "Edit Information" : "Personal Information"}
+          </p>
 
-        {editing ? (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem" }}>
-            {editFields.map(({ key, label }) => (
-              <EditField key={key} fieldKey={key} label={label} form={form} setForm={setForm} />
-            ))}
-          </div>
-        ) : (
-          <div>
-            <InfoRow icon={User}     label="Full Name"     value={profile?.full_name}    accent={rc.accent} />
-            <InfoRow icon={Mail}     label="Email"         value={profile?.email}        accent={rc.accent} />
-            <InfoRow icon={Phone}    label="Phone"         value={profile?.phone}        accent={rc.accent} />
-            <InfoRow icon={Hash}     label="Roll Number"   value={profile?.roll_number}  accent={rc.accent} />
-            <InfoRow icon={Hash}     label="Employee ID"   value={profile?.employee_id}  accent={rc.accent} />
-            <InfoRow icon={MapPin}   label="City"          value={profile?.city}         accent={rc.accent} />
-            <InfoRow icon={MapPin}   label="Address"       value={profile?.current_address} accent={rc.accent} />
-            <InfoRow icon={Building2}label="Designation"   value={profile?.designation}  accent={rc.accent} />
-            <InfoRow icon={BookOpen} label="Qualification" value={profile?.qualification} accent={rc.accent} />
-            <InfoRow icon={BookOpen} label="Specialization"value={profile?.specialization} accent={rc.accent} />
-            <InfoRow icon={Calendar} label="Joined"        value={profile?.joining_date} accent={rc.accent} />
-            <InfoRow icon={Shield}   label="Last Login"    value={profile?.last_login ? new Date(profile.last_login).toLocaleString() : null} accent={rc.accent} />
-          </div>
-        )}
+          {editing ? (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem" }}>
+              {editFields.map(({ key, label }) => (
+                <EditField key={key} fieldKey={key} label={label} form={form} setForm={setForm} />
+              ))}
+            </div>
+          ) : (
+            <div>
+              <InfoRow icon={User}      label="Full Name"      value={profile?.full_name}          accent={rc.accent} />
+              <InfoRow icon={Mail}      label="Email"          value={profile?.email}              accent={rc.accent} />
+              <InfoRow icon={Phone}     label="Phone"          value={profile?.phone}              accent={rc.accent} />
+              <InfoRow icon={Hash}      label="Roll Number"    value={profile?.roll_number}        accent={rc.accent} />
+              <InfoRow icon={Hash}      label="Employee ID"    value={profile?.employee_id}        accent={rc.accent} />
+              <InfoRow icon={MapPin}    label="City"           value={profile?.city}               accent={rc.accent} />
+              <InfoRow icon={MapPin}    label="Address"        value={profile?.current_address}    accent={rc.accent} />
+              <InfoRow icon={Building2} label="Designation"    value={profile?.designation}        accent={rc.accent} />
+              <InfoRow icon={BookOpen}  label="Qualification"  value={profile?.qualification}      accent={rc.accent} />
+              <InfoRow icon={BookOpen}  label="Specialization" value={profile?.specialization}     accent={rc.accent} />
+              <InfoRow icon={Calendar}  label="Joined"         value={profile?.joining_date}       accent={rc.accent} />
+              <InfoRow icon={Shield}    label="Last Login"     value={profile?.last_login ? new Date(profile.last_login).toLocaleString() : null} accent={rc.accent} />
+            </div>
+          )}
+        </div>
+
       </div>
 
       {/* ── Modals ── */}
-      {showChangePwd  && <ChangePasswordModal onClose={() => setShowChangePwd(false)} />}
+      {showChangePwd && <ChangePasswordModal onClose={() => setShowChangePwd(false)} />}
+
+      {/* ══════════════════════════════════════════════════════
+          FaceScannerWidget — mode="enroll"
+          Auto-capture, no timer, red border on fail,
+          auto-retry jab tak enroll na ho
+      ══════════════════════════════════════════════════════ */}
       {showFaceEnroll && (
-        <FaceEnrollModal
+        <FaceScannerWidget
+          mode="enroll"
+          apiCall={enrollApiCall}
+          onSuccess={handleEnrollSuccess}
           onClose={() => setShowFaceEnroll(false)}
-          onEnrolled={() => setFaceEnrolled(true)}
         />
       )}
     </div>
