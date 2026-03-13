@@ -80,3 +80,21 @@ def update_program(
         return error_response(error, "UPDATE_FAILED", status_code=404)
 
     return success_response(message="Program updated successfully")
+
+@router.delete("/{program_id}")
+def delete_program(
+    program_id: int,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin)
+):
+    program = ProgramService.get_by_id(db, program_id)
+    if not program:
+        return error_response("Program not found", "NOT_FOUND", status_code=404)
+    
+    try:
+        db.delete(program)
+        db.commit()
+        return success_response(message="Program deleted successfully")
+    except Exception as e:
+        db.rollback()
+        return error_response("Cannot delete — program may have enrolled students", "DELETE_FAILED", status_code=400)

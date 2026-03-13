@@ -2,12 +2,17 @@
 //  ProgramsPage.jsx  —  frontend/src/pages/admin/ProgramsPage.jsx
 // ═══════════════════════════════════════════════════════════════
 import { useState, useEffect, useMemo } from 'react'
+import AddButton from '../../components/ui/AddButton'
 import { Plus, Search, GraduationCap, Clock, Hash, Building2, Loader2, Edit2, Trash2, Eye, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminAPI } from '../../api/admin.api'
 import { useContextMenu, ContextMenu } from '../../hooks/useContextMenu'
 
 const CSS = `
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+  @keyframes spin   { to{transform:rotate(360deg)} }
+  @keyframes neu-slide-up { from{opacity:0;transform:translateY(20px) scale(.97)} to{opacity:1;transform:none} }
+
   .prog-card {
     background: var(--neu-surface);
     border: 1px solid var(--neu-border);
@@ -16,21 +21,20 @@ const CSS = `
     padding: 1.4rem;
     position: relative;
     overflow: hidden;
-    cursor: context-menu;
+    cursor: pointer;
     user-select: none;
-    transition: box-shadow .25s ease, transform .25s ease;
+    transition: box-shadow 0.25s ease, border-color 0.25s ease, transform 0.25s ease;
   }
   .prog-card:hover {
     transform: translateY(-4px);
     box-shadow: 10px 18px 32px var(--neu-shadow-dark), -4px -4px 14px var(--neu-shadow-light);
   }
-  .prog-card:hover .card-ring { opacity: 1; }
-  .card-ring {
+  .prog-card:hover .card-accent-border { opacity: 1; }
+  .card-accent-border {
     position: absolute; inset: 0; border-radius: 1.25rem;
-    pointer-events: none; opacity: 0; transition: opacity .25s ease;
+    pointer-events: none; opacity: 0; transition: opacity 0.25s ease;
   }
 `
-
 const iS = {
   width: '100%', background: 'var(--neu-surface-deep)',
   boxShadow: 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)',
@@ -194,91 +198,83 @@ function DeleteModal({ prog, onClose, onConfirm, loading }) {
 
 function ProgCard({ prog, pal, onContextMenu }) {
   return (
-    <div className="prog-card" onContextMenu={onContextMenu}>
-      {/* Top Accent Stripe - Clean indicator like Departments */}
-      <div style={{ 
-        position: 'absolute', top: 0, left: 0, right: 0, height: 4, 
-        background: pal.c, opacity: 0.8 
-      }} />
+    <div className="prog-card" onClick={onContextMenu}>
+      {/* Hover accent ring */}
+      <div className="card-accent-border" style={{ boxShadow: `inset 0 0 0 1.5px ${pal.ring}` }} />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
-        
-        {/* Header: Department Label & Hint */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Building2 size={12} style={{ color: pal.c }} />
-            <span style={{ 
-              fontSize: '0.7rem', 
-              fontWeight: 800, 
-              color: 'var(--neu-text-ghost)', 
-              textTransform: 'uppercase',
-              letterSpacing: '0.03em'
+      {/* Top accent stripe */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 4, background: pal.c, opacity: 0.8 }} />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+
+        {/* Code Badge */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span style={{
+            fontSize: '0.75rem', fontWeight: 800,
+            padding: '0.25rem 0.75rem',
+            background: 'var(--neu-surface-deep)', color: pal.c,
+            borderRadius: '0.5rem',
+            boxShadow: 'inset 2px 2px 4px var(--neu-shadow-dark), inset -1px -1px 3px var(--neu-shadow-light)',
+            fontFamily: 'monospace', letterSpacing: '0.05em'
+          }}>
+            {prog.code}
+          </span>
+          {prog.degree_type && (
+            <span style={{
+              fontSize: '0.68rem', fontWeight: 700,
+              padding: '0.2rem 0.55rem',
+              background: `${pal.c}18`, color: pal.c,
+              borderRadius: '0.4rem', border: `1px solid ${pal.ring}`
             }}>
-              {prog.department_name}
+              {prog.degree_type}
             </span>
-          </div>
+          )}
         </div>
 
-        {/* Program Title - Large & Readable */}
-        <div style={{ marginTop: '0.2rem' }}>
-          <h3 style={{ 
-            fontSize: '1.2rem', 
-            fontWeight: 800, 
-            color: 'var(--neu-text-primary)', 
-            lineHeight: 1.2,
-            fontFamily: 'Outfit, sans-serif'
+        {/* Program Name */}
+        <div style={{ marginTop: '0.25rem' }}>
+          <h3 style={{
+            fontSize: '1.1rem', fontWeight: 800,
+            color: 'var(--neu-text-primary)',
+            fontFamily: 'Outfit, sans-serif',
+            lineHeight: 1.2, marginBottom: '0.4rem'
           }}>
             {prog.name}
           </h3>
-          <div style={{ 
-            marginTop: '4px', 
-            fontSize: '0.75rem', 
-            color: pal.c, 
-            fontWeight: 700 
+          <p style={{
+            fontSize: '0.8rem', color: 'var(--neu-text-secondary)',
+            lineHeight: 1.5,
+            display: '-webkit-box', WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical', overflow: 'hidden',
+            minHeight: '2.4rem'
           }}>
-            {prog.level || 'Undergraduate'}
-          </div>
+            {prog.department_name || '—'}
+          </p>
         </div>
 
-        {/* Info Row: Using the clean inset style from Departments */}
-        <div style={{ 
-          display: 'grid', 
-          gridTemplateColumns: '1fr 1fr', 
-          gap: '1rem',
-          marginTop: '0.5rem', 
-          paddingTop: '1rem',
-          borderTop: '1px solid var(--neu-border)'
+        {/* Footer */}
+        <div style={{
+          display: 'flex', flexDirection: 'column', gap: '0.5rem',
+          paddingTop: '0.8rem', borderTop: '1px solid var(--neu-border)',
+          marginTop: '0.4rem'
         }}>
-          {/* Duration */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div >
-              <Clock size={20} style={{ color: pal.c }} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '0.8rem', color: 'var(--neu-text-primary)', fontWeight: 700 }}>
-                {prog.duration_years} Years
-              </span>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Clock size={13} style={{ color: pal.c }} />
+            <span style={{ fontSize: '0.75rem', color: 'var(--neu-text-primary)', fontWeight: 600 }}>
+              {prog.duration_years ? `${prog.duration_years} Years` : 'Duration N/A'}
+            </span>
           </div>
-
-          {/* Semesters */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <div>
-              <Hash size={20} style={{ color: pal.c }} />
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <span style={{ fontSize: '0.65rem', color: 'var(--neu-text-ghost)' }}></span>
-              <span style={{ fontSize: '0.8rem', color: 'var(--neu-text-primary)', fontWeight: 700 }}>
-                {prog.total_semesters} Sem
-              </span>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <Hash size={13} style={{ color: pal.c }} />
+            <span style={{ fontSize: '0.75rem', color: 'var(--neu-text-secondary)' }}>
+              {prog.total_credit_hours ? `${prog.total_credit_hours} Credit Hours` : 'Credits N/A'}
+            </span>
           </div>
         </div>
       </div>
     </div>
   )
 }
-
 function SkeletonCard() {
   return (
     <div style={{ background: 'var(--neu-surface)', border: '1px solid var(--neu-border)', borderRadius: '1.25rem', padding: '1.4rem', boxShadow: '6px 6px 16px var(--neu-shadow-dark), -3px -3px 10px var(--neu-shadow-light)' }}>
@@ -302,6 +298,7 @@ export default function ProgramsPage() {
   const [viewTarget,  setViewTarget]  = useState(null)
   const [delTarget,   setDelTarget]   = useState(null)
   const [deletingId,  setDeletingId]  = useState(null)
+  
 
   const { menu, open: openMenu, close: closeMenu } = useContextMenu()
 
@@ -347,9 +344,7 @@ export default function ProgramsPage() {
             <h1 style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', letterSpacing: '-.02em' }}>Programs</h1>
             <p style={{ fontSize: '.78rem', color: 'var(--neu-text-ghost)', marginTop: 2 }}>{programs.length} academic programs</p>
           </div>
-          <button onClick={() => setModal({})} style={{ display: 'flex', alignItems: 'center', gap: '.5rem', padding: '.65rem 1.25rem', background: 'linear-gradient(145deg,#22a06b,#1a7d54)', boxShadow: '0 4px 16px rgba(34,160,107,.38), 6px 6px 14px var(--neu-shadow-dark), -3px -3px 8px var(--neu-shadow-light)', border: '1px solid rgba(255,255,255,.18)', borderRadius: '.9rem', color: '#fff', fontWeight: 700, fontSize: '.82rem', cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
-            <Plus size={16} /> Add Program
-          </button>
+          <AddButton onClick={() => setModal({})} tooltip="Add Program" color="#22a06b" />
         </div>
 
         <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
@@ -364,7 +359,7 @@ export default function ProgramsPage() {
         </div>
 
         {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(270px,1fr))', gap: '1rem' }}>
             {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
         ) : filtered.length === 0 ? (
@@ -373,7 +368,7 @@ export default function ProgramsPage() {
             <p style={{ fontWeight: 600, color: 'var(--neu-text-secondary)' }}>{search || filterDept ? 'No match' : 'No programs yet'}</p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(260px,1fr))', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(270px,1fr))', gap: '1rem' }}>
             {filtered.map((prog, i) => {
               const pal = PALETTE[i % PALETTE.length]
               return <ProgCard key={prog.id} prog={prog} pal={pal} onContextMenu={e => openMenu(e, prog)} />
