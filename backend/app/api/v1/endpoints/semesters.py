@@ -113,3 +113,23 @@ def update_semester(
         return error_response(error, "UPDATE_FAILED", status_code=404)
 
     return success_response(message="Semester updated successfully")
+
+@router.delete("/{semester_id}")
+def delete_semester(
+    semester_id: int,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin)
+):
+    from app.models.academic import Semester
+    semester = db.query(Semester).filter(Semester.id == semester_id).first()
+    if not semester:
+        return error_response("Semester not found", "NOT_FOUND", status_code=404)
+    if semester.is_active:
+        return error_response("Cannot delete active semester", "DELETE_FAILED", status_code=400)
+    try:
+        db.delete(semester)
+        db.commit()
+        return success_response(message="Semester deleted successfully")
+    except Exception:
+        db.rollback()
+        return error_response("Cannot delete — semester may have linked data", "DELETE_FAILED", status_code=400)

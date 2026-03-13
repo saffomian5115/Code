@@ -41,6 +41,7 @@ export const adminAPI = {
   getSemester: (id) => api.get(`/semesters/${id}`),
   createSemester: (data) => api.post("/semesters", data),
   updateSemester: (id, data) => api.put(`/semesters/${id}`, data),
+  deleteSemester: (id) => api.delete(`/semesters/${id}`),
 
   // ─── COURSES ───────────────────────────────────────────
   getCourses: (params = {}) => {

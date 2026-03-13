@@ -1,6 +1,3 @@
-// ═══════════════════════════════════════════════════════════════
-//  ProgramsPage.jsx  —  frontend/src/pages/admin/ProgramsPage.jsx
-// ═══════════════════════════════════════════════════════════════
 import { useState, useEffect, useMemo } from 'react'
 import AddButton from '../../components/ui/AddButton'
 import { Plus, Search, GraduationCap, Clock, Hash, Building2, Loader2, Edit2, Trash2, Eye, X } from 'lucide-react'
