@@ -94,6 +94,23 @@ def update_course(
 
     return success_response(message="Course updated successfully")
 
+@router.delete("/{course_id}")
+def delete_course(
+    course_id: int,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin)
+):
+    course = CourseService.get_by_id(db, course_id)
+    if not course:
+        return error_response("Course not found", "NOT_FOUND", status_code=404)
+    try:
+        db.delete(course)
+        db.commit()
+        return success_response(message="Course deleted successfully")
+    except Exception:
+        db.rollback()
+        return error_response("Cannot delete — course may have linked offerings or enrollments", "DELETE_FAILED", status_code=400)
+
 # ─── CLO Endpoints ──────────────────────────────────────
 
 @router.post("/{course_id}/clos")
@@ -144,3 +161,25 @@ def delete_clo(
         return error_response(error, "DELETE_FAILED", status_code=404)
 
     return success_response(message="CLO deleted successfully")
+
+@router.put("/{course_id}/clos/{clo_id}")
+def update_clo(
+    course_id: int,
+    clo_id: int,
+    request: CLOCreateRequest,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin)
+):
+    from app.models.academic import CourseCLO
+    clo = db.query(CourseCLO).filter(
+        CourseCLO.id == clo_id,
+        CourseCLO.course_id == course_id
+    ).first()
+    if not clo:
+        return error_response("CLO not found", "NOT_FOUND", status_code=404)
+    data = request.model_dump(exclude_none=True)
+    for key, value in data.items():
+        setattr(clo, key, value)
+    db.commit()
+    db.refresh(clo)
+    return success_response(message="CLO updated successfully")

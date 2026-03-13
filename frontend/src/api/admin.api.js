@@ -54,6 +54,8 @@ export const adminAPI = {
   deleteCourse: (id) => api.delete(`/courses/${id}`),
   getCourseCLOs: (id) => api.get(`/courses/${id}/clos`),
   createCLO: (courseId, data) => api.post(`/courses/${courseId}/clos`, data),
+  deleteCLO: (courseId, cloId) => api.delete(`/courses/${courseId}/clos/${cloId}`),
+  updateCLO: (courseId, cloId, data) => api.put(`/courses/${courseId}/clos/${cloId}`, data),
 
   // ─── OFFERINGS ─────────────────────────────────────────
   getOfferings: (params = {}) => {
