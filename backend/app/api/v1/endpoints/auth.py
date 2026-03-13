@@ -8,13 +8,13 @@ from app.services.auth_service import AuthService
 from app.schemas.user import (
     LoginRequest, ChangePasswordRequest,
     RefreshTokenRequest, UpdateProfileRequest,
-    FaceLoginRequest, FaceEnrollRequest,         # ← NEW
+    FaceLoginRequest, FaceEnrollRequest,         
 )
 from app.utils.response import success_response, error_response
 from app.models.user import User
-from app.ai.face_recognition_engine import FaceRecognitionEngine  # ← NEW
-from app.core.security import create_access_token, create_refresh_token  # ← NEW
-from datetime import datetime, timezone  # ← was already there
+from app.ai.face_recognition_engine import FaceRecognitionEngine  
+from app.core.security import create_access_token, create_refresh_token  
+from datetime import datetime, timezone  
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -94,10 +94,6 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
 # ─── FACE LOGIN ─────────────────────────────────────────
 @router.post("/face-login")
 def face_login(request: FaceLoginRequest, db: Session = Depends(get_db)):
-    """
-    Face se login — email/password ki zaroorat nahi.
-    Frontend MediaPipe se face detect karke cropped base64 bhejta hai.
-    """
     result = FaceRecognitionEngine.login_by_face(
         db=db,
         image_base64=request.image_base64
@@ -144,9 +140,7 @@ def enroll_face_self(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """
-    Logged-in user apna face profile page se enroll kare.
-    """
+   
     result = FaceRecognitionEngine.enroll_face(
         db=db,
         user_id=current_user.id,
@@ -178,10 +172,10 @@ def update_profile(
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    result, error = AuthService.update_profile(db, current_user, request.model_dump(exclude_none=True))
+    user, error = AuthService.update_profile(db, current_user, request.model_dump(exclude_none=True))
     if error:
         return error_response(error, "UPDATE_FAILED")
-    return success_response(result, "Profile updated successfully")
+    return success_response(_build_profile(user), "Profile updated successfully")
 
 
 @router.post("/profile/upload-picture")

@@ -1,5 +1,5 @@
 venv
-
+uploads
 __pycache__
 models
 .env
