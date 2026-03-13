@@ -80,7 +80,7 @@ function DecayCard({ children, onCardClick, accent = "#5b8af0" }) {
         <svg viewBox="0 0 440 160" style={{ display: "block", width: "100%", height: "160px" }} preserveAspectRatio="xMidYMid slice">
           <defs>
             <filter id="cardDecay">
-              <feTurbulence type="turbulence" baseFrequency="0.012" numOctaves="4" seed="7" stitchTiles="stitch" result="turb" />
+              {/* <feTurbulence type="turbulence" baseFrequency="0.012" numOctaves="4" seed="7" stitchTiles="stitch" result="turb" /> */}
               <feDisplacementMap ref={displacementRef} in="SourceGraphic" in2="turb" scale="0" xChannelSelector="R" yChannelSelector="B" />
             </filter>
             <linearGradient id="cardGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -232,8 +232,6 @@ function ToggleSwitch({ accent, defaultOn = true }) {
 //  SettingsPanel
 // ─────────────────────────────────────────────────────────────
 function SettingsPanel({ onClose, onEditProfile, onChangePwd, onFaceEnroll, faceEnrolled, rc }) {
-  // ThemeContext exports: { theme, toggleTheme, colors, getColor, getShadow }
-  // isDark is NOT exported — derive it from theme string
   const { theme, toggleTheme } = useTheme();
   const panelRef = useRef(null);
 
@@ -556,8 +554,6 @@ export default function ProfilePage() {
   };
 
   // ── Profile Picture Upload ────────────────────────────────
-  // authAPI.uploadProfilePicture(file) — API internally wraps in FormData
-  // POST /auth/profile/upload-picture   returns: { profile_picture_url }
   const handlePicChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -577,8 +573,6 @@ export default function ProfilePage() {
   };
 
   // ── Face Enroll ───────────────────────────────────────────
-  // FaceScannerWidget passes base64 string to apiCall
-  // authAPI.enrollFace(image_base64) → POST /auth/enroll-face  body: { image_base64 }
   const enrollApiCall = useCallback(async (base64) => {
     return await authAPI.enrollFace(base64);
   }, []);
@@ -608,15 +602,6 @@ export default function ProfilePage() {
   return (
     <div className="neu-page-bg" style={{ minHeight: "100vh", padding: "2rem 1rem", display: "flex", alignItems: "flex-start", justifyContent: "center" }}>
       <div style={{ width: "100%", maxWidth: "520px" }}>
-
-        <div style={{ marginBottom: "2rem", textAlign: "center" }}>
-          <h1 style={{ fontSize: "1.75rem", fontWeight: 800, color: "var(--neu-text-primary)", fontFamily: "Outfit, sans-serif", margin: 0 }}>
-            My Profile
-          </h1>
-          <p style={{ fontSize: "0.82rem", color: "var(--neu-text-ghost)", marginTop: "0.25rem" }}>
-            Hover to see the effect · Click to manage settings
-          </p>
-        </div>
 
         {/* Hidden file input */}
         <input ref={fileInputRef} type="file" accept="image/*" style={{ display: "none" }} onChange={handlePicChange} />

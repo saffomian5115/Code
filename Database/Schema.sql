@@ -1,5 +1,5 @@
 -- =====================================================
--- DATABASE: lms_system (COMPLETE WITH MULTI-GATE SUPPORT)
+-- DATABASE: lms_system (LEARNING MANAGEMENT SYSTEM)
 -- =====================================================
 CREATE DATABASE IF NOT EXISTS AI_Driven_SMart_LMS;
 USE AI_Driven_SMart_LMS;
