@@ -187,3 +187,27 @@ def toggle_teacher_status(
         {"is_active": teacher.is_active},
         f"Teacher {status} successfully"
     )
+
+@router.delete("/{teacher_id}")
+def delete_teacher(
+    teacher_id: int,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin)
+):
+    from app.models.user import User
+    teacher = db.query(User).filter(
+        User.id == teacher_id,
+        User.role == "teacher"
+    ).first()
+    if not teacher:
+        return error_response("Teacher not found", "NOT_FOUND", status_code=404)
+    try:
+        db.execute(
+            __import__('sqlalchemy').text("DELETE FROM users WHERE id = :id"),
+            {"id": teacher_id}
+        )
+        db.commit()
+        return success_response(message="Teacher deleted successfully")
+    except Exception as e:
+        db.rollback()
+        return error_response(str(e), "DELETE_FAILED", status_code=400)

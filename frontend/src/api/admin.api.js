@@ -10,6 +10,7 @@ export const adminAPI = {
   createStudent: (data) => api.post("/students", data),
   updateStudent: (id, data) => api.put(`/students/${id}`, data),
   toggleStudentStatus: (id) => api.patch(`/students/${id}/status`),
+  deleteStudent: (id) => api.delete(`/students/${id}`),
   // ─── TEACHERS ──────────────────────────────────────────
   getTeachers: (page = 1, per_page = 20, search = "") =>
     api.get(
@@ -19,6 +20,7 @@ export const adminAPI = {
   createTeacher: (data) => api.post("/teachers", data),
   updateTeacher: (id, data) => api.put(`/teachers/${id}`, data),
   toggleTeacherStatus: (id) => api.patch(`/teachers/${id}/status`),
+  deleteTeacher: (id) => api.delete(`/teachers/${id}`),
 
   // ─── DEPARTMENTS ───────────────────────────────────────
   getDepartments: () => api.get("/departments"),

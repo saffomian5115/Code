@@ -1,8 +1,3 @@
-// ═══════════════════════════════════════════════════════════════
-//  TeachersPage.jsx  —  Neumorphic + Right-click Context Menu
-//  Replace: frontend/src/pages/admin/TeachersPage.jsx
-// ═══════════════════════════════════════════════════════════════
-
 import { useState, useEffect, useCallback } from 'react'
 import {
   Plus, Search, Eye, Edit2, Trash2, Loader2,
@@ -12,10 +7,11 @@ import {
   UserCheck, UserX,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
+import AddButton from '../../components/ui/AddButton'
 import { adminAPI } from '../../api/admin.api'
 import { useContextMenu, ContextMenu } from '../../hooks/useContextMenu'
 
-const BASE_URL = 'http://127.0.0.1:8000'
+const BASE_URL = import.meta.env.VITE_BASE_URL || '';
 
 const inputStyle = {
   width: '100%',
@@ -429,21 +425,7 @@ export default function TeachersPage() {
             {pagination.total} faculty members
           </p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          style={{
-            display: 'flex', alignItems: 'center', gap: '0.5rem',
-            padding: '0.65rem 1.2rem',
-            background: 'linear-gradient(145deg, #9b59b6, #7d3c98)',
-            boxShadow: '0 4px 14px rgba(155,89,182,0.3), 6px 6px 14px var(--neu-shadow-dark), -3px -3px 8px var(--neu-shadow-light)',
-            border: '1px solid rgba(255,255,255,0.15)',
-            borderRadius: '0.875rem',
-            color: '#fff', fontWeight: 700, fontSize: '0.82rem',
-            cursor: 'pointer', fontFamily: "'DM Sans', sans-serif",
-          }}
-        >
-          <Plus size={16} /> Add Teacher
-        </button>
+        <AddButton onClick={() => setShowCreate(true)} tooltip="Add Teacher" color="#9b59b6" />
       </div>
 
       {/* Search */}
@@ -465,9 +447,7 @@ export default function TeachersPage() {
         borderRadius: '1.25rem',
         overflow: 'hidden',
       }}>
-        <p style={{ padding: '0.6rem 1rem', fontSize: '0.68rem', color: 'var(--neu-text-ghost)', borderBottom: '1px solid var(--neu-border)', fontWeight: 600, letterSpacing: '0.04em' }}>
-          Right-click on a row to see actions
-        </p>
+        
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -500,8 +480,8 @@ export default function TeachersPage() {
                   : teachers.map((t, idx) => (
                     <tr
                       key={t.user_id}
-                      onContextMenu={e => openMenu(e, t)}
-                      style={{ cursor: 'context-menu', transition: 'background 0.12s' }}
+                      onClick={e => openMenu(e, t)}
+                      style={{ cursor: 'pointer', transition: 'background 0.12s' }}
                       onMouseEnter={e => e.currentTarget.style.background = 'var(--neu-surface-deep)'}
                       onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                     >

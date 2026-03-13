@@ -239,3 +239,28 @@ def toggle_status(
         "user_id": user.id,
         "is_active": user.is_active
     }, f"Student {'activated' if user.is_active else 'deactivated'}")
+
+@router.delete("/{student_id}")
+def delete_student(
+    student_id: int,
+    db: Session = Depends(get_db),
+    admin=Depends(require_admin)
+):
+    from app.models.user import User
+    student = db.query(User).filter(
+        User.id == student_id,
+        User.role == "student"
+    ).first()
+    if not student:
+        return error_response("Student not found", "NOT_FOUND", status_code=404)
+    try:
+        # Raw SQL se force delete — MySQL CASCADE handle karega
+        db.execute(
+            __import__('sqlalchemy').text("DELETE FROM users WHERE id = :id"),
+            {"id": student_id}
+        )
+        db.commit()
+        return success_response(message="Student deleted successfully")
+    except Exception as e:
+        db.rollback()
+        return error_response(str(e), "DELETE_FAILED", status_code=400)
