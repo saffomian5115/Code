@@ -11,35 +11,6 @@ import { useTheme } from "../../context/ThemeContext";
 import FaceScannerWidget from "../../components/shared/FaceScannerWidget";
 
 // ─────────────────────────────────────────────────────────────
-//  Floating background orbs
-// ─────────────────────────────────────────────────────────────
-function BackgroundOrbs() {
-  return (
-    <div style={{ position: "fixed", inset: 0, overflow: "hidden", pointerEvents: "none", zIndex: 0 }}>
-      <div style={{
-        position: "absolute", top: "-15%", left: "-10%",
-        width: "55vw", height: "55vw", borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(91,138,240,0.12) 0%, transparent 70%)",
-        animation: "neu-float 7s ease-in-out infinite",
-      }} />
-      <div style={{
-        position: "absolute", bottom: "-20%", right: "-10%",
-        width: "50vw", height: "50vw", borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(62,207,142,0.09) 0%, transparent 70%)",
-        animation: "neu-float 9s ease-in-out infinite reverse",
-      }} />
-      <div style={{
-        position: "absolute", top: "40%", left: "55%",
-        width: "20vw", height: "20vw", borderRadius: "50%",
-        background: "radial-gradient(circle, rgba(245,166,35,0.06) 0%, transparent 70%)",
-        animation: "neu-float 5s ease-in-out infinite",
-        animationDelay: "1.5s",
-      }} />
-    </div>
-  );
-}
-
-// ─────────────────────────────────────────────────────────────
 //  Theme Toggle Button
 // ─────────────────────────────────────────────────────────────
 function ThemeToggle() {
@@ -150,7 +121,6 @@ export default function LoginPage() {
       transition: "background 0.35s ease",
     }}>
 
-      <BackgroundOrbs />
       <ThemeToggle />
 
       {/* ── Main Card ── */}
@@ -160,20 +130,11 @@ export default function LoginPage() {
       >
         {/* ── Logo / Brand ── */}
         <div className="neu-animate-slide-up" style={{ textAlign: "center", marginBottom: "2rem" }}>
-          <div style={{
-            display: "inline-flex", alignItems: "center", justifyContent: "center",
-            width: "3.5rem", height: "3.5rem", borderRadius: "1rem",
-            background: "linear-gradient(145deg, var(--neu-surface), var(--neu-surface-deep))",
-            boxShadow: "var(--neu-raised-md)",
-            marginBottom: "1rem",
-          }}>
-            <Zap size={22} style={{ color: "var(--neu-accent)" }} />
-          </div>
           <h1 className="neu-heading" style={{ fontSize: "1.6rem", marginBottom: "0.25rem" }}>
-            Smart LMS
+            BZU LMS
           </h1>
           <p className="neu-subtext" style={{ fontSize: "0.82rem" }}>
-            AI-Driven Learning Management System
+            AI-Driven Smart Learning Management System
           </p>
         </div>
 
@@ -258,7 +219,7 @@ export default function LoginPage() {
             display: "flex", alignItems: "center", gap: "0.75rem", animationDelay: "0.22s",
           }}>
             <div style={{ flex: 1, height: "1px", background: "var(--neu-border-inner)" }} />
-            <span style={{ color: "var(--neu-text-ghost)", fontSize: "0.75rem" }}>ya</span>
+            <span style={{ color: "var(--neu-text-ghost)", fontSize: "0.75rem" }}>or</span>
             <div style={{ flex: 1, height: "1px", background: "var(--neu-border-inner)" }} />
           </div>
 
@@ -306,16 +267,10 @@ export default function LoginPage() {
           textAlign: "center", color: "var(--neu-text-ghost)",
           fontSize: "0.7rem", marginTop: "1.5rem", animationDelay: "0.5s",
         }}>
-          AI-Driven Smart LMS — Sarfraz RBSIT-21-13
+          SARFRAZ | RBSIT-21-13
         </p>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════
-          FaceScannerWidget — mode="login"
-          Purani FaceCameraModal ki jagah yeh use hoga.
-          Auto-capture, no timer, red border on fail, auto-retry,
-          5 attempts ke baad blocked overlay with retry button.
-      ══════════════════════════════════════════════════════════ */}
       {cameraOpen && (
         <FaceScannerWidget
           key={cameraKey}

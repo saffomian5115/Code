@@ -1,9 +1,3 @@
-// ═══════════════════════════════════════════════════════════════
-//  ProfilePage.jsx  —  Neumorphic Premium Profile
-//  Replace:  frontend/src/pages/shared/ProfilePage.jsx
-//  CHANGE: FaceEnrollModal → FaceScannerWidget mode="enroll"
-// ═══════════════════════════════════════════════════════════════
-
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   User, Mail, Phone, MapPin, Calendar, Shield,
@@ -15,7 +9,7 @@ import { authAPI } from "../../api/auth.api";
 import { authStore } from "../../store/authStore";
 import FaceScannerWidget from "../../components/shared/FaceScannerWidget";
 
-const BASE_URL = "http://127.0.0.1:8000";
+const BASE_URL = import.meta.env.VITE_BASE_URL;
 
 const ROLE_CONFIG = {
   admin:   { accent: "#9b59b6", bg: "rgba(155,89,182,0.12)", label: "Administrator" },

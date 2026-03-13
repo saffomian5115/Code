@@ -1,7 +1,3 @@
-// ═══════════════════════════════════════════════════════════════
-//  Navbar.jsx  —  Neumorphic Top Bar with Dock Magnification
-// ═══════════════════════════════════════════════════════════════
-
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -11,7 +7,7 @@ import {
 import { authStore } from '../../store/authStore'
 import { useTheme } from '../../context/ThemeContext'
 
-const BASE_URL = 'http://127.0.0.1:8000'
+const BASE_URL = import.meta.env.VITE_BASE_URL;
 
 // --- Magnification Constants ---
 const BASE_SIZE = 38  // Normal button size
@@ -108,8 +104,18 @@ export default function Navbar({ onToggleSidebar }) {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) setDropdownOpen(false)
       if (bellRef.current && !bellRef.current.contains(e.target)) setBellOpen(false)
     }
+  const onKeyDown = (e) => {
+    if (e.key === 'Escape') {
+      setDropdownOpen(false)
+      setBellOpen(false)
+    }
+  }
     document.addEventListener('mousedown', clickOutside)
-    return () => document.removeEventListener('mousedown', clickOutside)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+    document.removeEventListener('mousedown', clickOutside)
+    document.removeEventListener('keydown', onKeyDown)
+  }
   }, [])
 
   return (

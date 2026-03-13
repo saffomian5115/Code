@@ -1,18 +1,3 @@
-// ═══════════════════════════════════════════════════════════════════════
-//  FaceScannerWidget.jsx
-//  Path: frontend/src/components/shared/FaceScannerWidget.jsx
-//
-//  FIX: apiCall / onSuccess / onFail ko refs mein store kiya taake
-//       fd.onResults callback hamesha latest version use kare —
-//       yahi woh stale closure bug tha jis ki wajah se 4 mein se
-//       sirf 1 baar capture hota tha.
-//
-//  Ek hi reusable component — teeno jagah use hota hai:
-//    1. Login page  → mode="login"   → 5 attempts, phir band
-//    2. Gate kiosk  → mode="gate"    → hamesha chalta rahe, success card
-//    3. Profile     → mode="enroll"  → jab tak enroll na ho, retry karta rahe
-// ═══════════════════════════════════════════════════════════════════════
-
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { FaceDetection } from '@mediapipe/face_detection'
 import {
@@ -27,12 +12,12 @@ const MODE_CFG = {
     retryDelay:   1500,
     scanCooldown: 2500,
     showCard:     false,
-    cardDuration: 2200,
+    cardDuration: 2000,
     accentColor:  '#5b8af0',
     layout:       'modal',
     theme:        'light',
     title:        'Face Login',
-    subtitle:     'Apna chehra camera ke saamne rakho',
+    subtitle:     '',
   },
   gate: {
     maxAttempts:  Infinity,
@@ -56,7 +41,7 @@ const MODE_CFG = {
     layout:       'modal',
     theme:        'light',
     title:        'Face Enroll',
-    subtitle:     'Chehra seedha rakho — auto detect hoga',
+    subtitle:     '',
   },
 }
 
@@ -123,11 +108,6 @@ function SuccessCard({ data, accentColor, onDone, duration }) {
         </span>
       )}
       {data?.duplicate && <span style={{ fontSize:'0.68rem', color:'#fbbf24' }}>⚠ Already marked today</span>}
-      {data?.confidence !== undefined && (
-        <p style={{ fontSize:'0.66rem', color:'#64748b', margin:0 }}>
-          {(data.confidence * 100).toFixed(0)}% match · {data.processing_time_ms ?? '—'}ms
-        </p>
-      )}
     </div>
   )
 }
@@ -150,13 +130,7 @@ function FailOverlay({ attempts, maxAttempts, mode }) {
       }}>
         <AlertCircle size={20} color="#f87171" style={{ margin:'0 auto 0.32rem', display:'block' }} />
         <p style={{ color:'#f87171', fontWeight:700, fontSize:'0.8rem', margin:0 }}>
-          Face recognize nahi hua
-        </p>
-        <p style={{ color:'#94a3b8', fontSize:'0.7rem', marginTop:'0.18rem', margin:'0.18rem 0 0' }}>
-          {mode === 'login' && remaining !== null && remaining > 0
-            ? `${remaining} attempt${remaining === 1 ? '' : 's'} baaki — retry ho raha hai…`
-            : 'Dobara try ho raha hai…'
-          }
+          No face recognized {maxAttempts !== Infinity ? ` — ${attempts}/${maxAttempts} attempts` : ''}
         </p>
       </div>
     </div>
@@ -185,7 +159,7 @@ function MaxAttemptsOverlay({ onClose, onRetry, accentColor }) {
         5/5 Attempts Complete
       </p>
       <p style={{ fontSize:'0.76rem', color:'#94a3b8', margin:0, textAlign:'center', maxWidth:210 }}>
-        Face login nahi ho saka۔ Password se login karo ya dobara try karo۔
+        Face Not Login۔ Try with Password۔
       </p>
       <div style={{ display:'flex', gap:'0.55rem', marginTop:'0.15rem' }}>
         <button onClick={onRetry} style={{
@@ -194,7 +168,7 @@ function MaxAttemptsOverlay({ onClose, onRetry, accentColor }) {
           color:accentColor, fontSize:'0.76rem', fontWeight:700,
           display:'flex', alignItems:'center', gap:'0.3rem',
         }}>
-          <RefreshCw size={12} /> Dobara Try
+          <RefreshCw size={12} /> Try Again
         </button>
         {onClose && (
           <button onClick={onClose} style={{
@@ -202,7 +176,7 @@ function MaxAttemptsOverlay({ onClose, onRetry, accentColor }) {
             border:'1px solid rgba(255,255,255,0.12)', background:'rgba(255,255,255,0.06)',
             color:'#94a3b8', fontSize:'0.76rem', fontWeight:600,
           }}>
-            Band Karo
+            Close
           </button>
         )}
       </div>
@@ -255,9 +229,6 @@ export default function FaceScannerWidget({
   const mountedRef    = useRef(true)
   const attemptsRef   = useRef(0)
 
-  // ── FIX: Keep latest prop callbacks in refs ───────────────────────────
-  // Yeh teen refs ki wajah se fd.onResults callback kabhi stale nahi hoga
-  // chahe kitni baar bhi component re-render ho ya naya apiCall prop aaye
   const apiCallRef   = useRef(apiCall)
   const onSuccessRef = useRef(onSuccess)
   const onFailRef    = useRef(onFail)
@@ -337,9 +308,6 @@ export default function FaceScannerWidget({
   }, [])
 
   // ── On face detected → try scan ───────────────────────────────────────
-  // FIX: apiCall, onSuccess, onFail direct use nahi karte — refs se lete hain
-  // Isliye yeh function kabhi stale nahi hoga, dependencies mein sirf
-  // stable values hain (refs, COOL, CARD, MAX, RDLY, captureFace, setStatus)
   const onFaceDetected = useCallback(async (box) => {
     if (processingRef.current)            return
     if (statusRef.current !== 'scanning') return
@@ -354,7 +322,6 @@ export default function FaceScannerWidget({
     setStatus('processing')
 
     try {
-      // ← ref se latest apiCall lo, stale closure nahi hogi
       const res  = await apiCallRef.current(base64)
       const data = res?.data?.data
 
@@ -366,7 +333,7 @@ export default function FaceScannerWidget({
         setSuccessData(data ?? res?.data)
         setStatus('success')
         if (!CARD) {
-          // login / enroll — seedha callback
+          // login / enroll 
           onSuccessRef.current?.(data ?? res?.data)
         }
       } else {
@@ -440,9 +407,6 @@ export default function FaceScannerWidget({
       const fd = new FaceDetection({ locateFile: f => `/node_modules/@mediapipe/face_detection/${f}` })
       fd.setOptions({ model: 'short', minDetectionConfidence: 0.6 })
 
-      // ── FIX: onResults mein onFaceDetected directly call karte hain ──
-      // onFaceDetected ab stable hai (refs ki wajah se) isliye
-      // fd.onResults ko dobara register karne ki zaroorat nahi
       fd.onResults(results => {
         if (!mountedRef.current) return
         const faces = results.detections ?? []
@@ -500,11 +464,11 @@ export default function FaceScannerWidget({
   // ── Status bar ────────────────────────────────────────────────────────
   const attemptStr  = MAX !== Infinity ? ` (${attempts}/${MAX})` : ''
   const statusLabel = {
-    loading:    '⏳ Camera shuru ho rahi hai…',
+    loading:    '⏳ Camera is starting...',
     scanning:   `🎯 Scanning${attemptStr}…`,
-    processing: '🔄 Verify ho raha hai…',
-    success:    '✅ Pehchaan ho gayi!',
-    fail:       maxed ? '🚫 Max attempts — retry karo' : '❌ Recognize nahi hua — retry ho raha hai…',
+    processing: '🔄 Verifing...',
+    success:    '✅ Face Match!',
+    fail:       maxed ? '🚫 Max attempts reached' : '❌ Not Recognize — retry…',
   }[status] ?? ''
 
   const statusColor = {
@@ -604,7 +568,7 @@ export default function FaceScannerWidget({
             background:'rgba(0,0,0,0.65)', backdropFilter:'blur(4px)',
           }}>
             <Loader2 size={28} color={ACC} style={{ animation:'fsw-spin 1s linear infinite' }} />
-            <p style={{ color:'#94a3b8', fontSize:'0.76rem', margin:0 }}>Camera load ho rahi hai…</p>
+            <p style={{ color:'#94a3b8', fontSize:'0.76rem', margin:0 }}>Camera is loading...</p>
           </div>
         )}
 
@@ -616,7 +580,7 @@ export default function FaceScannerWidget({
             background:'rgba(0,0,0,0.5)', backdropFilter:'blur(3px)', pointerEvents:'none',
           }}>
             <Loader2 size={26} color="#a78bfa" style={{ animation:'fsw-spin 0.7s linear infinite' }} />
-            <p style={{ color:'#a78bfa', fontSize:'0.76rem', fontWeight:600, margin:0 }}>Verify ho raha hai…</p>
+            <p style={{ color:'#a78bfa', fontSize:'0.76rem', fontWeight:600, margin:0 }}>Verifying...</p>
           </div>
         )}
 
