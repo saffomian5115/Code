@@ -1,11 +1,12 @@
 // ═══════════════════════════════════════════════════════════════
 //  OfferingsPage.jsx  —  frontend/src/pages/admin/OfferingsPage.jsx
 // ═══════════════════════════════════════════════════════════════
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import {
-  Plus, Search, BookOpen, Users, MapPin, Clock,
+  Search, BookOpen, Users, MapPin, Clock,
   Loader2, Edit2, Trash2, Eye, X, Calendar,
-  ChevronLeft, ChevronRight, User,
+  ChevronLeft, ChevronRight, User, Plus,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminAPI } from '../../api/admin.api'
@@ -13,15 +14,23 @@ import { useContextMenu, ContextMenu } from '../../hooks/useContextMenu'
 
 /* ─── CSS ────────────────────────────────────────── */
 const CSS = `
+  @keyframes neu-slide-up {
+    from { opacity: 0; transform: translateY(18px) scale(.97); }
+    to   { opacity: 1; transform: translateY(0)    scale(1);   }
+  }
+  @keyframes spin  { to { transform: rotate(360deg); } }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+  @keyframes neu-fade-in { from{opacity:0;transform:translateY(-4px)} to{opacity:1;transform:translateY(0)} }
+
   .off-card {
     background: var(--neu-surface);
     border: 1px solid var(--neu-border);
     border-radius: 1.25rem;
     box-shadow: 6px 6px 16px var(--neu-shadow-dark), -3px -3px 10px var(--neu-shadow-light);
-    padding: 1.35rem;
+    padding: 0;
     position: relative;
     overflow: hidden;
-    cursor: context-menu;
+    cursor: pointer;
     user-select: none;
     transition: transform .22s ease, box-shadow .22s ease;
   }
@@ -32,11 +41,19 @@ const CSS = `
   .off-card:hover .oc-ring { opacity: 1; }
   .oc-ring {
     position: absolute; inset: 0; border-radius: 1.25rem;
-    pointer-events: none; opacity: 0;
-    transition: opacity .22s ease;
+    pointer-events: none; opacity: 0; transition: opacity .22s ease;
+  }
+  .add-btn-tip {
+    position: fixed; pointer-events: none; z-index: 99999;
+    background: var(--neu-surface); border: 1px solid var(--neu-border);
+    border-radius: .6rem; padding: .3rem .7rem;
+    font-size: .72rem; font-weight: 700; color: var(--neu-text-primary);
+    box-shadow: 4px 4px 12px var(--neu-shadow-dark); white-space: nowrap;
+    animation: neu-fade-in .1s ease both;
   }
 `
 
+/* ─── Shared styles ──────────────────────────────── */
 const iS = {
   width: '100%', background: 'var(--neu-surface-deep)',
   boxShadow: 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)',
@@ -44,8 +61,9 @@ const iS = {
   padding: '.6rem .9rem', fontSize: '.85rem', color: 'var(--neu-text-primary)',
   outline: 'none', fontFamily: "'DM Sans',sans-serif",
 }
-const F = ({ label, children }) => (
-  <div style={{ display: 'flex', flexDirection: 'column', gap: '.35rem' }}>
+
+const F = ({ label, children, wide }) => (
+  <div style={{ display: 'flex', flexDirection: 'column', gap: '.35rem', gridColumn: wide ? 'span 2' : 'span 1' }}>
     <label style={{ fontSize: '.68rem', fontWeight: 700, color: 'var(--neu-text-ghost)', letterSpacing: '.06em', textTransform: 'uppercase' }}>{label}</label>
     {children}
   </div>
@@ -70,11 +88,49 @@ const fmt12 = t => {
   return `${h % 12 || 12}:${String(m).padStart(2,'0')}${ampm}`
 }
 
-/* ─── Modal Shell ────────────────────────────────── */
-function Modal({ children, maxW = 560 }) {
+/* ─── AddButton ──────────────────────────────────── */
+const BASE = 42, MAX_SZ = 54, DIST = 110
+function AddButton({ onClick, tooltip = 'Add', color = '#5b8af0' }) {
+  const ref    = useRef(null)
+  const [size, setSize] = useState(BASE)
+  const [tip,  setTip]  = useState(null)
+  const [mx,   setMx]   = useState(-9999)
+
+  useEffect(() => {
+    if (!ref.current || mx === -9999) { setSize(BASE); return }
+    const rect = ref.current.getBoundingClientRect()
+    const center = rect.left + rect.width / 2
+    const dist = Math.abs(mx - center)
+    if (dist >= DIST) { setSize(BASE); return }
+    const t = 1 - dist / DIST
+    const e = t * t * (3 - 2 * t)
+    setSize(BASE + (MAX_SZ - BASE) * e)
+  }, [mx])
+
   return (
-    <div style={{ position: 'fixed', inset: 0, background: 'rgba(8,12,20,.7)', backdropFilter: 'blur(10px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-      <div style={{ width: '100%', maxWidth: maxW, background: 'var(--neu-surface)', boxShadow: '14px 14px 36px var(--neu-shadow-dark), -6px -6px 20px var(--neu-shadow-light)', border: '1px solid var(--neu-border)', borderRadius: '1.5rem', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'neu-slide-up .2s cubic-bezier(.34,1.56,.64,1) both' }}>
+    <div onMouseMove={e => setMx(e.clientX)} onMouseLeave={() => { setMx(-9999); setTip(null) }}>
+      <button
+        ref={ref}
+        onClick={onClick}
+        onMouseEnter={e => { const r = e.currentTarget.getBoundingClientRect(); setTip({ top: r.bottom + 8, left: r.left + r.width / 2 }) }}
+        onMouseLeave={() => setTip(null)}
+        style={{ width: size, height: size, borderRadius: '.85rem', background: 'var(--neu-surface)', boxShadow: `4px 4px 12px var(--neu-shadow-dark), -2px -2px 8px var(--neu-shadow-light), 0 0 0 1.5px ${color}55`, border: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color, transition: 'width .1s ease, height .1s ease', flexShrink: 0 }}
+      >
+        <Plus size={Math.round(size * 0.44)} />
+      </button>
+      {tip && createPortal(
+        <div className="add-btn-tip" style={{ top: tip.top, left: tip.left, transform: 'translateX(-50%)' }}>{tooltip}</div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
+/* ─── Modal Shell ────────────────────────────────── */
+function Modal({ children, maxW = 580 }) {
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(8,12,20,.72)', backdropFilter: 'blur(10px)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+      <div style={{ width: '100%', maxWidth: maxW, background: 'var(--neu-surface)', boxShadow: '14px 14px 36px var(--neu-shadow-dark), -6px -6px 20px var(--neu-shadow-light)', border: '1px solid var(--neu-border)', borderRadius: '1.5rem', maxHeight: '90vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', animation: 'neu-slide-up .22s cubic-bezier(.34,1.56,.64,1) both' }}>
         {children}
       </div>
     </div>
@@ -83,67 +139,67 @@ function Modal({ children, maxW = 560 }) {
 
 /* ─── View Details Modal ─────────────────────────── */
 function ViewModal({ offering, pal, onClose }) {
-  const enrolled   = offering.enrolled_count || 0
-  const max        = offering.max_students   || 0
-  const pct        = max ? Math.round((enrolled / max) * 100) : 0
-  const fillColor  = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f97316' : '#22a06b'
+  const enrolled  = offering.enrolled_count || offering.enrolled_students || 0
+  const max       = offering.max_students || 0
+  const pct       = max ? Math.round((enrolled / max) * 100) : 0
+  const fillColor = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f97316' : '#22a06b'
+  const schedule  = offering.schedule_json || offering.schedule || []
+
+  const rows = [
+    { label: 'Course Code',  value: offering.course_code },
+    { label: 'Section',      value: offering.section },
+    { label: 'Teacher',      value: offering.teacher_name },
+    { label: 'Semester',     value: offering.semester_name },
+    { label: 'Room',         value: offering.room_number || '—' },
+    { label: 'Max Students', value: String(max) },
+    { label: 'Enrolled',     value: `${enrolled} / ${max}` },
+    { label: 'Status',       value: offering.is_active !== false ? 'Active' : 'Inactive' },
+  ].filter(r => r.value)
 
   return (
-    <Modal maxW={480}>
+    <Modal maxW={500}>
       <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', gap: '.85rem' }}>
         <div style={{ width: 50, height: 50, borderRadius: '1rem', background: pal.bg, border: `1px solid ${pal.ring}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
           <BookOpen size={22} style={{ color: pal.c }} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h2 style={{ fontSize: '1.02rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', lineHeight: 1.2 }}>{offering.course_name}</h2>
+          <h2 style={{ fontSize: '1.02rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', lineHeight: 1.25 }}>{offering.course_name}</h2>
           <div style={{ display: 'flex', gap: '.35rem', marginTop: '.3rem', flexWrap: 'wrap' }}>
             <span style={{ fontSize: '.63rem', fontWeight: 800, padding: '.15rem .5rem', background: pal.bg, color: pal.c, border: `1px solid ${pal.ring}`, borderRadius: '.4rem', fontFamily: 'monospace' }}>{offering.course_code}</span>
-            <span style={{ fontSize: '.63rem', fontWeight: 800, padding: '.15rem .5rem', background: 'rgba(91,138,240,.1)', color: '#5b8af0', borderRadius: '.4rem' }}>Section {offering.section}</span>
+            <span style={{ fontSize: '.63rem', fontWeight: 700, padding: '.15rem .5rem', background: 'rgba(91,138,240,.1)', color: '#5b8af0', borderRadius: '.4rem' }}>Section {offering.section}</span>
           </div>
         </div>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neu-text-ghost)', padding: '.25rem' }}><X size={18} /></button>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neu-text-ghost)', padding: '.25rem', borderRadius: '.5rem' }}><X size={18} /></button>
       </div>
 
-      <div style={{ padding: '1.1rem 1.4rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.55rem', overflowY: 'auto' }}>
-        {[
-          { label: 'Teacher',   value: offering.teacher_name },
-          { label: 'Semester',  value: offering.semester_name },
-          { label: 'Room',      value: offering.room_number || '—' },
-          { label: 'Max Seats', value: `${max}` },
-        ].map(r => (
+      <div style={{ padding: '1.1rem 1.4rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.5rem', overflowY: 'auto' }}>
+        {rows.map(r => (
           <div key={r.label} style={{ background: 'var(--neu-surface-deep)', borderRadius: '.8rem', padding: '.7rem 1rem', boxShadow: 'inset 2px 2px 5px var(--neu-shadow-dark), inset -1px -1px 4px var(--neu-shadow-light)' }}>
             <p style={{ fontSize: '.62rem', fontWeight: 700, color: 'var(--neu-text-ghost)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: '.2rem' }}>{r.label}</p>
             <p style={{ fontSize: '.85rem', color: 'var(--neu-text-primary)', fontWeight: 500 }}>{r.value}</p>
           </div>
         ))}
-
-        {/* Enrollment bar */}
-        <div style={{ gridColumn: 'span 2', background: 'var(--neu-surface-deep)', borderRadius: '.8rem', padding: '.8rem 1rem', boxShadow: 'inset 2px 2px 5px var(--neu-shadow-dark), inset -1px -1px 4px var(--neu-shadow-light)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '.5rem' }}>
-            <span style={{ fontSize: '.62rem', fontWeight: 700, color: 'var(--neu-text-ghost)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Enrollment</span>
-            <span style={{ fontSize: '.75rem', fontWeight: 700, color: fillColor }}>{enrolled}/{max} ({pct}%)</span>
-          </div>
-          <div style={{ height: 6, background: 'var(--neu-border)', borderRadius: 99 }}>
-            <div style={{ height: '100%', width: `${pct}%`, background: fillColor, borderRadius: 99, transition: 'width .4s ease' }} />
+        <div style={{ gridColumn: 'span 2', background: 'var(--neu-surface-deep)', borderRadius: '.8rem', padding: '.7rem 1rem', boxShadow: 'inset 2px 2px 5px var(--neu-shadow-dark), inset -1px -1px 4px var(--neu-shadow-light)' }}>
+          <p style={{ fontSize: '.62rem', fontWeight: 700, color: 'var(--neu-text-ghost)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: '.5rem' }}>Capacity ({pct}%)</p>
+          <div style={{ height: 7, background: 'var(--neu-border)', borderRadius: 99, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: fillColor, borderRadius: 99 }} />
           </div>
         </div>
-
-        {/* Schedule */}
-        {offering.schedule?.length > 0 && (
-          <div style={{ gridColumn: 'span 2', background: 'var(--neu-surface-deep)', borderRadius: '.8rem', padding: '.8rem 1rem', boxShadow: 'inset 2px 2px 5px var(--neu-shadow-dark), inset -1px -1px 4px var(--neu-shadow-light)' }}>
+        {schedule.length > 0 && (
+          <div style={{ gridColumn: 'span 2', background: 'var(--neu-surface-deep)', borderRadius: '.8rem', padding: '.7rem 1rem', boxShadow: 'inset 2px 2px 5px var(--neu-shadow-dark), inset -1px -1px 4px var(--neu-shadow-light)' }}>
             <p style={{ fontSize: '.62rem', fontWeight: 700, color: 'var(--neu-text-ghost)', letterSpacing: '.06em', textTransform: 'uppercase', marginBottom: '.5rem' }}>Schedule</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '.3rem' }}>
-              {offering.schedule.map((s, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '.6rem', fontSize: '.8rem' }}>
-                  <span style={{ fontSize: '.68rem', fontWeight: 700, padding: '.12rem .5rem', background: pal.bg, color: pal.c, borderRadius: '.35rem', textTransform: 'capitalize', minWidth: 80 }}>{s.day}</span>
-                  <span style={{ color: 'var(--neu-text-primary)', fontWeight: 500 }}>{fmt12(s.start_time)} — {fmt12(s.end_time)}</span>
+              {schedule.map((s, i) => (
+                <div key={i} style={{ display: 'flex', gap: '.5rem', alignItems: 'center', fontSize: '.8rem', color: 'var(--neu-text-secondary)' }}>
+                  <span style={{ textTransform: 'capitalize', fontWeight: 600, color: pal.c, minWidth: 80 }}>{s.day}</span>
+                  <span>{fmt12(s.start_time)} – {fmt12(s.end_time)}</span>
+                  {s.room && <span style={{ color: 'var(--neu-text-ghost)' }}>• {s.room}</span>}
                 </div>
               ))}
             </div>
           </div>
         )}
       </div>
-
       <div style={{ padding: '.9rem 1.4rem', borderTop: '1px solid var(--neu-border)' }}>
         <button onClick={onClose} style={{ ...iS, cursor: 'pointer', textAlign: 'center', fontWeight: 600, color: 'var(--neu-text-secondary)', padding: '.6rem' }}>Close</button>
       </div>
@@ -151,14 +207,14 @@ function ViewModal({ offering, pal, onClose }) {
   )
 }
 
-/* ─── Enrolled Students Modal ────────────────────── */
+/* ─── Students Modal ─────────────────────────────── */
 function StudentsModal({ offering, onClose }) {
   const [students, setStudents] = useState([])
   const [loading,  setLoading]  = useState(true)
 
   useEffect(() => {
-    adminAPI.getOfferingStudents?.(offering.id)
-      .then(r => setStudents(r.data.data?.students || r.data.data?.enrollments || []))
+    adminAPI.getOfferingStudents(offering.id)
+      .then(r => setStudents(r.data.data?.students || []))
       .catch(() => toast.error('Failed to load students'))
       .finally(() => setLoading(false))
   }, [offering.id])
@@ -168,11 +224,11 @@ function StudentsModal({ offering, onClose }) {
       <div style={{ padding: '1.4rem 1.5rem', borderBottom: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div>
           <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>Enrolled Students</h2>
-          <p style={{ fontSize: '.73rem', color: 'var(--neu-text-ghost)', marginTop: '.15rem' }}>{offering.course_name} — Sec {offering.section}</p>
+          <p style={{ fontSize: '.72rem', color: 'var(--neu-text-ghost)', marginTop: '.1rem' }}>{offering.course_name} — Sec {offering.section}</p>
         </div>
         <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neu-text-ghost)' }}><X size={18} /></button>
       </div>
-      <div style={{ padding: '1rem 1.5rem', overflowY: 'auto', maxHeight: '60vh' }}>
+      <div style={{ padding: '1rem 1.5rem', overflowY: 'auto', flex: 1, maxHeight: '60vh' }}>
         {loading ? (
           <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Loader2 size={20} style={{ color: '#5b8af0', animation: 'spin 1s linear infinite' }} /></div>
         ) : students.length === 0 ? (
@@ -180,7 +236,7 @@ function StudentsModal({ offering, onClose }) {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '.45rem' }}>
             {students.map((s, i) => (
-              <div key={s.user_id || i} style={{ display: 'flex', alignItems: 'center', gap: '.75rem', padding: '.65rem .9rem', background: 'var(--neu-surface-deep)', borderRadius: '.8rem', boxShadow: 'inset 2px 2px 5px var(--neu-shadow-dark), inset -1px -1px 4px var(--neu-shadow-light)' }}>
+              <div key={s.student_id || i} style={{ display: 'flex', alignItems: 'center', gap: '.75rem', padding: '.65rem .9rem', background: 'var(--neu-surface-deep)', borderRadius: '.8rem', boxShadow: 'inset 2px 2px 5px var(--neu-shadow-dark), inset -1px -1px 4px var(--neu-shadow-light)' }}>
                 <div style={{ width: 32, height: 32, borderRadius: '.6rem', background: 'rgba(91,138,240,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <User size={14} style={{ color: '#5b8af0' }} />
                 </div>
@@ -203,92 +259,172 @@ function StudentsModal({ offering, onClose }) {
   )
 }
 
-/* ─── Create Offering Modal ──────────────────────── */
-function OfferingModal({ courses, teachers, semesters, onClose, onSuccess }) {
+/* ─── Create / Edit Modal ────────────────────────── */
+function OfferingModal({ courses, teachers, semesters, offering, onClose, onSuccess }) {
+  const isEdit = !!offering?.id
+
+  const existingSchedule = offering?.schedule_json || offering?.schedule
+
   const [form, setForm] = useState({
-    course_id: '', teacher_id: '', semester_id: semesters?.[0]?.id || '',
-    section: 'A', room_number: '', max_students: 40,
-    schedule_json: [{ day: 'monday', start_time: '09:00', end_time: '10:30' }],
+    course_id:     offering?.course_id     ? Number(offering.course_id)   : '',
+    instructor_id: offering?.instructor_id ? Number(offering.instructor_id) : '',
+    semester_id:   offering?.semester_id   ? Number(offering.semester_id) : (semesters?.[0]?.id ? Number(semesters[0].id) : ''),
+    section:       offering?.section       || 'A',
+    room_number:   offering?.room_number   || '',
+    max_students:  offering?.max_students  || 40,
+    schedule_json: Array.isArray(existingSchedule) && existingSchedule.length > 0
+      ? existingSchedule
+      : [{ day: 'monday', start_time: '09:00', end_time: '10:30' }],
   })
   const [loading, setLoading] = useState(false)
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
-  const addSlot   = () => setForm(p => ({ ...p, schedule_json: [...p.schedule_json, { day: 'tuesday', start_time: '09:00', end_time: '10:30' }] }))
-  const removeSlot = i => setForm(p => ({ ...p, schedule_json: p.schedule_json.filter((_, idx) => idx !== i) }))
+  // Bug 3 fix: teachers async load hoti hain — jab load ho jayen tab instructor match karo
+  useEffect(() => {
+    if (!isEdit || !offering || teachers.length === 0) return
+    // agar already set hai to skip
+    if (form.instructor_id) return
+    // instructor_name se match karo
+    const name = offering.instructor_name || offering.teacher_name
+    if (name) {
+      const match = teachers.find(t =>
+        t.full_name?.toLowerCase().trim() === name.toLowerCase().trim()
+      )
+      if (match) set('instructor_id', Number(match.user_id))
+    }
+  }, [teachers]) // eslint-disable-line
+
+  const addSlot    = () => setForm(p => ({ ...p, schedule_json: [...p.schedule_json, { day: 'tuesday', start_time: '09:00', end_time: '10:30' }] }))
+  const removeSlot = i  => setForm(p => ({ ...p, schedule_json: p.schedule_json.filter((_, idx) => idx !== i) }))
   const updateSlot = (i, k, v) => setForm(p => { const s = [...p.schedule_json]; s[i] = { ...s[i], [k]: v }; return { ...p, schedule_json: s } })
 
   const submit = async () => {
-    if (!form.course_id || !form.teacher_id || !form.semester_id) { toast.error('Course, teacher and semester required'); return }
+    if (!form.instructor_id) { toast.error('Teacher required'); return }
     setLoading(true)
     try {
-      await adminAPI.createOffering(form); toast.success('Offering created!')
+      if (isEdit) {
+        await adminAPI.updateOffering(offering.id, {
+          instructor_id: form.instructor_id,
+          max_students:  form.max_students,
+          room_number:   form.room_number,
+          schedule_json: form.schedule_json,
+        })
+        toast.success('Offering updated!')
+      } else {
+        if (!form.course_id || !form.semester_id) { toast.error('Course and semester required'); setLoading(false); return }
+        await adminAPI.createOffering(form)
+        toast.success('Offering created!')
+      }
       onSuccess(); onClose()
     } catch (e) { toast.error(e.response?.data?.message || 'Failed') }
     finally { setLoading(false) }
   }
 
   return (
-    <Modal maxW={600}>
+    <Modal maxW={640}>
       <div style={{ padding: '1.4rem 1.5rem', borderBottom: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '.65rem' }}>
-          <div style={{ width: 34, height: 34, borderRadius: '.65rem', background: 'rgba(91,138,240,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><BookOpen size={15} style={{ color: '#5b8af0' }} /></div>
-          <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>Create Offering</h2>
+          <div style={{ width: 36, height: 36, borderRadius: '.7rem', background: 'rgba(91,138,240,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <BookOpen size={16} style={{ color: '#5b8af0' }} />
+          </div>
+          <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>
+            {isEdit ? 'Edit Offering' : 'Create Offering'}
+          </h2>
         </div>
         <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neu-text-ghost)' }}><X size={18} /></button>
       </div>
 
       <div style={{ padding: '1.2rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '.85rem', overflowY: 'auto' }}>
+
+        {/* Course — locked on edit, editable on create */}
         <F label="Course *">
-          <select style={iS} value={form.course_id} onChange={e => set('course_id', parseInt(e.target.value))}>
+          <select
+            style={{ ...iS, ...(isEdit ? { opacity: .55, cursor: 'not-allowed' } : {}) }}
+            value={form.course_id}
+            onChange={e => !isEdit && set('course_id', Number(e.target.value))}
+            disabled={isEdit}
+          >
             <option value="">— Select Course —</option>
-            {courses.map(c => <option key={c.id} value={c.id}>{c.name} ({c.code})</option>)}
+            {courses.map(c => <option key={c.id} value={Number(c.id)}>{c.name} ({c.code})</option>)}
           </select>
         </F>
+
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.8rem' }}>
+
+          {/* Teacher — ALWAYS editable */}
           <F label="Teacher *">
-            <select style={iS} value={form.teacher_id} onChange={e => set('teacher_id', parseInt(e.target.value))}>
+            <select style={iS} value={form.instructor_id} onChange={e => set('instructor_id', Number(e.target.value))}>
               <option value="">— Select Teacher —</option>
-              {teachers.map(t => <option key={t.user_id} value={t.user_id}>{t.full_name}</option>)}
+              {teachers.map(t => <option key={t.user_id} value={Number(t.user_id)}>{t.full_name}</option>)}
             </select>
           </F>
+
+          {/* Semester — locked on edit */}
           <F label="Semester *">
-            <select style={iS} value={form.semester_id} onChange={e => set('semester_id', parseInt(e.target.value))}>
+            <select
+              style={{ ...iS, ...(isEdit ? { opacity: .55, cursor: 'not-allowed' } : {}) }}
+              value={form.semester_id}
+              onChange={e => !isEdit && set('semester_id', Number(e.target.value))}
+              disabled={isEdit}
+            >
               <option value="">— Select Semester —</option>
-              {semesters.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+              {semesters.map(s => <option key={s.id} value={Number(s.id)}>{s.name}{s.is_active ? ' ★' : ''}</option>)}
             </select>
           </F>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '.8rem' }}>
+
+          {/* Section — locked on edit */}
           <F label="Section">
-            <select style={iS} value={form.section} onChange={e => set('section', e.target.value)}>
-              {['A','B','C','D','E'].map(s => <option key={s}>{s}</option>)}
-            </select>
+            <input
+              style={{ ...iS, ...(isEdit ? { opacity: .55, cursor: 'not-allowed', background: 'var(--neu-surface-deep)' } : {}) }}
+              value={form.section}
+              onChange={e => set('section', e.target.value)}
+              readOnly={isEdit}
+              placeholder="A"
+            />
           </F>
-          <F label="Room">
-            <input style={iS} value={form.room_number} onChange={e => set('room_number', e.target.value)} placeholder="IT-101" />
+
+          {/* Room — ALWAYS editable */}
+          <F label="Room Number">
+            <input
+              style={iS}
+              value={form.room_number}
+              onChange={e => set('room_number', e.target.value)}
+              placeholder="e.g. LH-01"
+            />
           </F>
+
+          {/* Max Students — ALWAYS editable */}
           <F label="Max Students">
-            <input style={iS} type="number" value={form.max_students} onChange={e => set('max_students', parseInt(e.target.value))} />
+            <input
+              style={iS}
+              type="number"
+              value={form.max_students}
+              onChange={e => set('max_students', Number(e.target.value) || 1)}
+              min={1}
+            />
           </F>
         </div>
 
-        {/* Schedule */}
+        {/* Schedule slots */}
         <div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '.5rem' }}>
-            <label style={{ fontSize: '.68rem', fontWeight: 700, color: 'var(--neu-text-ghost)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Class Schedule</label>
-            <button onClick={addSlot} style={{ fontSize: '.72rem', color: '#5b8af0', background: 'none', border: 'none', cursor: 'pointer', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '.25rem' }}>
-              <Plus size={12} /> Add slot
+            <label style={{ fontSize: '.68rem', fontWeight: 700, color: 'var(--neu-text-ghost)', letterSpacing: '.06em', textTransform: 'uppercase' }}>Schedule</label>
+            <button onClick={addSlot} style={{ fontSize: '.72rem', fontWeight: 700, color: '#5b8af0', background: 'rgba(91,138,240,.1)', border: '1px solid rgba(91,138,240,.25)', borderRadius: '.5rem', padding: '.25rem .65rem', cursor: 'pointer' }}>
+              + Add Slot
             </button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
             {form.schedule_json.map((slot, i) => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr auto', gap: '.5rem', alignItems: 'center' }}>
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr auto', gap: '.5rem', alignItems: 'end' }}>
                 <select style={iS} value={slot.day} onChange={e => updateSlot(i, 'day', e.target.value)}>
-                  {DAYS.map(d => <option key={d} value={d} style={{ textTransform: 'capitalize' }}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
+                  {DAYS.map(d => <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>)}
                 </select>
                 <input style={iS} type="time" value={slot.start_time} onChange={e => updateSlot(i, 'start_time', e.target.value)} />
-                <input style={iS} type="time" value={slot.end_time}   onChange={e => updateSlot(i, 'end_time', e.target.value)} />
-                <button onClick={() => removeSlot(i)} style={{ width: 34, height: 34, borderRadius: '.65rem', background: 'rgba(239,68,68,.1)', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444', flexShrink: 0 }}>
+                <input style={iS} type="time" value={slot.end_time}   onChange={e => updateSlot(i, 'end_time',   e.target.value)} />
+                <button
+                  onClick={() => removeSlot(i)}
+                  disabled={form.schedule_json.length === 1}
+                  style={{ width: 36, height: 36, borderRadius: '.6rem', background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.2)', color: '#ef4444', cursor: form.schedule_json.length === 1 ? 'not-allowed' : 'pointer', opacity: form.schedule_json.length === 1 ? .4 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <X size={14} />
                 </button>
               </div>
@@ -300,7 +436,8 @@ function OfferingModal({ courses, teachers, semesters, onClose, onSuccess }) {
       <div style={{ padding: '.9rem 1.5rem', borderTop: '1px solid var(--neu-border)', display: 'flex', gap: '.6rem' }}>
         <button onClick={onClose} style={{ ...iS, cursor: 'pointer', textAlign: 'center', fontWeight: 600, color: 'var(--neu-text-secondary)', flex: 1, padding: '.6rem' }}>Cancel</button>
         <button onClick={submit} disabled={loading} style={{ flex: 1, padding: '.6rem', borderRadius: '.75rem', border: 'none', background: 'linear-gradient(145deg,#5b8af0,#3a6bd4)', boxShadow: '0 4px 14px rgba(91,138,240,.35)', color: '#fff', fontWeight: 700, fontSize: '.85rem', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? .7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.4rem', fontFamily: "'DM Sans',sans-serif" }}>
-          {loading && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}Create Offering
+          {loading && <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} />}
+          {isEdit ? 'Save Changes' : 'Create Offering'}
         </button>
       </div>
     </Modal>
@@ -317,9 +454,11 @@ function DeleteModal({ offering, onClose, onConfirm, loading }) {
         </div>
         <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', marginBottom: '.4rem' }}>Delete Offering?</h3>
         <p style={{ fontSize: '.82rem', color: 'var(--neu-text-muted)', marginBottom: '.35rem' }}>
-          <strong style={{ color: 'var(--neu-text-primary)' }}>{offering?.course_name}</strong> — Sec {offering?.section}
+          <strong style={{ color: 'var(--neu-text-primary)' }}>{offering?.course_name}</strong> — Section {offering?.section}
         </p>
-        <p style={{ fontSize: '.75rem', color: '#ef4444', marginBottom: '1.6rem' }}>Enrolled students bhi remove ho jayenge.</p>
+        <p style={{ fontSize: '.75rem', color: '#ef4444', marginBottom: '1.6rem' }}>
+          Enrolled students aur linked records bhi delete ho jayenge.
+        </p>
         <div style={{ display: 'flex', gap: '.6rem' }}>
           <button onClick={onClose} style={{ ...iS, cursor: 'pointer', textAlign: 'center', fontWeight: 600, color: 'var(--neu-text-secondary)', flex: 1, padding: '.6rem' }}>Cancel</button>
           <button onClick={onConfirm} disabled={loading} style={{ flex: 1, padding: '.6rem', borderRadius: '.75rem', border: 'none', background: 'linear-gradient(145deg,#f26b6b,#d94f4f)', boxShadow: '0 4px 14px rgba(242,107,107,.3)', color: '#fff', fontWeight: 700, fontSize: '.85rem', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? .7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.4rem', fontFamily: "'DM Sans',sans-serif" }}>
@@ -331,86 +470,101 @@ function DeleteModal({ offering, onClose, onConfirm, loading }) {
   )
 }
 
-/* ─── Offering Card ──────────────────────────────── */
-function OfferingCard({ offering, pal, onContextMenu }) {
-  const enrolled  = offering.enrolled_count || 0
-  const max       = offering.max_students   || 0
-  const pct       = max ? Math.round((enrolled / max) * 100) : 0
-  const fillColor = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f97316' : '#22a06b'
-
+/* ─── Skeleton Card ──────────────────────────────── */
+function SkeletonCard() {
   return (
-    <div className="off-card" onContextMenu={onContextMenu}>
-      <div className="oc-ring" style={{ boxShadow: `inset 0 0 0 1.5px ${pal.ring}` }} />
-      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, borderRadius: '1.25rem 1.25rem 0 0', background: `linear-gradient(90deg,${pal.c},${pal.c}44,transparent)` }} />
-
-      {/* header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
-        <div style={{ width: 44, height: 44, borderRadius: '.875rem', background: pal.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <BookOpen size={20} style={{ color: pal.c }} />
+    <div style={{ background: 'var(--neu-surface)', border: '1px solid var(--neu-border)', borderRadius: '1.25rem', overflow: 'hidden', boxShadow: '6px 6px 16px var(--neu-shadow-dark)' }}>
+      <div style={{ height: 4, background: 'var(--neu-surface-deep)' }} />
+      <div style={{ padding: '1.25rem 1.35rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
+          <div style={{ width: 44, height: 44, borderRadius: '.875rem', background: 'var(--neu-surface-deep)', animation: 'pulse 1.5s infinite' }} />
+          <div style={{ width: 52, height: 22, borderRadius: '.4rem', background: 'var(--neu-surface-deep)', animation: 'pulse 1.5s infinite' }} />
         </div>
-        <div style={{ display: 'flex', gap: '.35rem' }}>
-          <span style={{ fontSize: '.63rem', fontWeight: 800, padding: '.18rem .55rem', background: pal.bg, color: pal.c, border: `1px solid ${pal.ring}`, borderRadius: '.4rem', fontFamily: 'monospace' }}>{offering.course_code}</span>
-          <span style={{ fontSize: '.63rem', fontWeight: 800, padding: '.18rem .5rem', background: 'rgba(91,138,240,.1)', color: '#5b8af0', borderRadius: '.4rem' }}>§{offering.section}</span>
-        </div>
+        <div style={{ height: 12, background: 'var(--neu-surface-deep)', borderRadius: 6, width: '65%', marginBottom: '.5rem', animation: 'pulse 1.5s infinite' }} />
+        <div style={{ height: 10, background: 'var(--neu-surface-deep)', borderRadius: 6, width: '45%', marginBottom: '1rem', animation: 'pulse 1.5s infinite' }} />
+        <div style={{ height: 6, background: 'var(--neu-surface-deep)', borderRadius: 99, animation: 'pulse 1.5s infinite' }} />
       </div>
-
-      <h3 style={{ fontSize: '.93rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', lineHeight: 1.3, marginBottom: '.25rem' }}>{offering.course_name}</h3>
-
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '.2rem', marginBottom: '.85rem' }}>
-        {offering.teacher_name && (
-          <span style={{ fontSize: '.72rem', color: 'var(--neu-text-ghost)', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
-            <User size={10} />{offering.teacher_name}
-          </span>
-        )}
-        {offering.room_number && (
-          <span style={{ fontSize: '.72rem', color: 'var(--neu-text-ghost)', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
-            <MapPin size={10} />Room {offering.room_number}
-          </span>
-        )}
-        {offering.semester_name && (
-          <span style={{ fontSize: '.72rem', color: 'var(--neu-text-ghost)', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
-            <Calendar size={10} />{offering.semester_name}
-          </span>
-        )}
-      </div>
-
-      {/* Schedule pills */}
-      {offering.schedule?.length > 0 && (
-        <div style={{ display: 'flex', gap: '.35rem', flexWrap: 'wrap', marginBottom: '.85rem' }}>
-          {offering.schedule.slice(0, 3).map((s, i) => (
-            <span key={i} style={{ fontSize: '.62rem', fontWeight: 600, padding: '.15rem .5rem', background: 'var(--neu-surface-deep)', color: 'var(--neu-text-muted)', borderRadius: '.4rem', textTransform: 'capitalize' }}>
-              {s.day.slice(0, 3)} {fmt12(s.start_time)}
-            </span>
-          ))}
-        </div>
-      )}
-
-      {/* Enrollment bar */}
-      <div style={{ paddingTop: '.75rem', borderTop: '1px solid var(--neu-border)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '.35rem' }}>
-          <span style={{ fontSize: '.7rem', color: 'var(--neu-text-muted)', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
-            <Users size={11} style={{ color: 'var(--neu-text-ghost)' }} />{enrolled} enrolled
-          </span>
-          <span style={{ fontSize: '.7rem', fontWeight: 700, color: fillColor }}>{pct}%</span>
-        </div>
-        <div style={{ height: 5, background: 'var(--neu-border)', borderRadius: 99 }}>
-          <div style={{ height: '100%', width: `${pct}%`, background: fillColor, borderRadius: 99 }} />
-        </div>
-      </div>
-      <span style={{ position: 'absolute', bottom: '.5rem', right: '.7rem', fontSize: '.58rem', color: 'var(--neu-text-ghost)', opacity: .4, pointerEvents: 'none' }}>⊞ right-click</span>
     </div>
   )
 }
 
-function SkeletonCard() {
+/* ─── Offering Card ──────────────────────────────── */
+function OfferingCard({ offering, pal, onClick }) {
+  const enrolled  = offering.enrolled_count || offering.enrolled_students || 0
+  const max       = offering.max_students || 0
+  const pct       = max ? Math.round((enrolled / max) * 100) : 0
+  const fillColor = pct >= 90 ? '#ef4444' : pct >= 70 ? '#f97316' : '#22a06b'
+  const schedule  = offering.schedule_json || offering.schedule || []
+  const firstSlot = schedule[0]
+
   return (
-    <div style={{ background: 'var(--neu-surface)', border: '1px solid var(--neu-border)', borderRadius: '1.25rem', padding: '1.35rem', boxShadow: '6px 6px 16px var(--neu-shadow-dark)' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem' }}>
-        <div style={{ width: 44, height: 44, borderRadius: '.875rem', background: 'var(--neu-surface-deep)', animation: 'pulse 1.5s infinite' }} />
-        <div style={{ width: 52, height: 22, borderRadius: '.4rem', background: 'var(--neu-surface-deep)', animation: 'pulse 1.5s infinite' }} />
+    <div className="off-card" onClick={onClick}>
+      {/* Accent stripe top */}
+      <div style={{ height: 4, background: pal.c, width: '100%' }} />
+
+      {/* Hover ring */}
+      <div className="oc-ring" style={{ border: `2px solid ${pal.ring}` }} />
+
+      <div style={{ padding: '1.2rem 1.35rem 1.35rem' }}>
+        {/* Top: icon + section badge */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '1rem' }}>
+          <div style={{ width: 44, height: 44, borderRadius: '.875rem', background: pal.bg, border: `1px solid ${pal.ring}`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <BookOpen size={20} style={{ color: pal.c }} />
+          </div>
+          <span style={{ fontSize: '.65rem', fontWeight: 800, padding: '.2rem .6rem', background: 'rgba(91,138,240,.1)', color: '#5b8af0', border: '1px solid rgba(91,138,240,.25)', borderRadius: '.45rem', letterSpacing: '.03em' }}>
+            SEC {offering.section}
+          </span>
+        </div>
+
+        {/* Course code */}
+        <div style={{ marginBottom: '.4rem' }}>
+          <span style={{ fontSize: '.62rem', fontWeight: 800, fontFamily: 'monospace', padding: '.15rem .55rem', background: pal.bg, color: pal.c, border: `1px solid ${pal.ring}`, borderRadius: '.4rem' }}>
+            {offering.course_code}
+          </span>
+        </div>
+
+        {/* Course name */}
+        <p style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', lineHeight: 1.3, marginBottom: '.3rem', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', minHeight: '2.5rem' }}>
+          {offering.course_name}
+        </p>
+
+        {/* Teacher */}
+        <p style={{ fontSize: '.75rem', color: 'var(--neu-text-ghost)', marginBottom: '.85rem', display: 'flex', alignItems: 'center', gap: '.3rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          <User size={11} style={{ flexShrink: 0 }} />
+          {offering.teacher_name || '—'}
+        </p>
+
+        {/* Capacity bar */}
+        <div style={{ marginBottom: '.8rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '.3rem' }}>
+            <span style={{ fontSize: '.65rem', color: 'var(--neu-text-ghost)', fontWeight: 600 }}>Enrolled</span>
+            <span style={{ fontSize: '.65rem', fontWeight: 700, color: fillColor }}>{enrolled}/{max}</span>
+          </div>
+          <div style={{ height: 5, background: 'var(--neu-border)', borderRadius: 99, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${Math.min(pct, 100)}%`, background: fillColor, borderRadius: 99, transition: 'width .4s ease' }} />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: '.75rem', borderTop: '1px solid var(--neu-border)', flexWrap: 'wrap', gap: '.3rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.3rem', fontSize: '.68rem', color: 'var(--neu-text-ghost)' }}>
+            <Calendar size={10} />
+            <span>{offering.semester_name || '—'}</span>
+          </div>
+          {firstSlot && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '.3rem', fontSize: '.68rem', color: 'var(--neu-text-ghost)' }}>
+              <Clock size={10} />
+              <span style={{ textTransform: 'capitalize' }}>{firstSlot.day?.slice(0,3)} {fmt12(firstSlot.start_time)}</span>
+            </div>
+          )}
+          {offering.room_number && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '.3rem', fontSize: '.68rem', color: 'var(--neu-text-ghost)' }}>
+              <MapPin size={10} />
+              <span>{offering.room_number}</span>
+            </div>
+          )}
+        </div>
       </div>
-      <div style={{ height: 13, background: 'var(--neu-surface-deep)', borderRadius: 6, width: '70%', marginBottom: '.5rem', animation: 'pulse 1.5s infinite' }} />
-      <div style={{ height: 10, background: 'var(--neu-surface-deep)', borderRadius: 6, width: '50%', animation: 'pulse 1.5s infinite' }} />
     </div>
   )
 }
@@ -419,64 +573,90 @@ function SkeletonCard() {
    MAIN PAGE
 ═══════════════════════════════════════════════════ */
 export default function OfferingsPage() {
-  const [offerings,   setOfferings]   = useState([])
-  const [courses,     setCourses]     = useState([])
-  const [teachers,    setTeachers]    = useState([])
-  const [semesters,   setSemesters]   = useState([])
-  const [loading,     setLoading]     = useState(true)
-  const [search,      setSearch]      = useState('')
-  const [filterSem,   setFilterSem]   = useState('')
-  const [page,        setPage]        = useState(1)
-  const [showCreate,  setShowCreate]  = useState(false)
-  const [viewTarget,  setViewTarget]  = useState(null)
-  const [studTarget,  setStudTarget]  = useState(null)
-  const [delTarget,   setDelTarget]   = useState(null)
-  const [deletingId,  setDeletingId]  = useState(null)
+  const [offerings,  setOfferings]  = useState([])
+  const [courses,    setCourses]    = useState([])
+  const [teachers,   setTeachers]   = useState([])
+  const [semesters,  setSemesters]  = useState([])
+  const [loading,    setLoading]    = useState(true)
+  const [search,     setSearch]     = useState('')
+  const [filterSem,  setFilterSem]  = useState('')
+  const [page,       setPage]       = useState(1)
+  const [showForm,   setShowForm]   = useState(false)
+  const [editTarget, setEditTarget] = useState(null)
+  const [viewTarget, setViewTarget] = useState(null)
+  const [studTarget, setStudTarget] = useState(null)
+  const [delTarget,  setDelTarget]  = useState(null)
+  const [deletingId, setDeletingId] = useState(null)
 
   const { menu, open: openMenu, close: closeMenu } = useContextMenu()
 
   const filtered = useMemo(() => {
     let r = offerings
-    if (filterSem) r = r.filter(o => o.semester_id == filterSem)
+    if (filterSem) {
+      r = r.filter(o => {
+        // semester_id se match karo (agar backend bhejta hai)
+        if (o.semester_id !== undefined && o.semester_id !== null) {
+          return String(o.semester_id) === String(filterSem)
+        }
+        // fallback: semesters list se semester_name dhundho
+        const sem = semesters.find(s => String(s.id) === String(filterSem))
+        return sem && o.semester_name === sem.name
+      })
+    }
     if (search.trim()) {
       const q = search.toLowerCase()
-      r = r.filter(o => o.course_name?.toLowerCase().includes(q) || o.course_code?.toLowerCase().includes(q) || o.teacher_name?.toLowerCase().includes(q))
+      r = r.filter(o =>
+        o.course_name?.toLowerCase().includes(q) ||
+        o.course_code?.toLowerCase().includes(q) ||
+        o.instructor_name?.toLowerCase().includes(q) ||
+        o.teacher_name?.toLowerCase().includes(q) ||
+        o.semester_name?.toLowerCase().includes(q) ||
+        o.section?.toLowerCase().includes(q)
+      )
     }
     return r
-  }, [offerings, filterSem, search])
+  }, [offerings, filterSem, search, semesters])
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PER_PAGE))
   const paginated  = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE)
 
-  const fetchAll = async () => {
+  const fetchAll = useCallback(async () => {
     setLoading(true)
     try {
       const [o, c, t, s] = await Promise.all([
-        adminAPI.getOfferings(), adminAPI.getCourses(),
-        adminAPI.getTeachers(1, 200), adminAPI.getSemesters(),
+        adminAPI.getOfferings(),
+        adminAPI.getCourses(),
+        adminAPI.getTeachers(1, 200),
+        adminAPI.getSemesters(),
       ])
       setOfferings(o.data.data?.offerings || [])
-      setCourses(c.data.data?.courses || [])
-      setTeachers(t.data.data?.teachers || [])
+      setCourses(c.data.data?.courses     || [])
+      setTeachers(t.data.data?.teachers   || [])
       setSemesters(s.data.data?.semesters || [])
     } catch { toast.error('Failed to load') }
     finally { setLoading(false) }
-  }
-  useEffect(() => { fetchAll() }, [])
+  }, [])
+
+  useEffect(() => { fetchAll() }, [fetchAll])
   useEffect(() => { setPage(1) }, [search, filterSem])
 
   const handleDelete = async () => {
     setDeletingId(delTarget.id)
-    try { await adminAPI.deleteOffering(delTarget.id); toast.success('Offering deleted'); setDelTarget(null); fetchAll() }
-    catch (e) { toast.error(e.response?.data?.message || 'Cannot delete') }
+    try {
+      await adminAPI.deleteOffering(delTarget.id)
+      toast.success('Offering deleted')
+      setDelTarget(null)
+      fetchAll()
+    } catch (e) { toast.error(e.response?.data?.message || 'Cannot delete') }
     finally { setDeletingId(null) }
   }
 
   const ctxItems = (pal) => [
-    { label: 'View Details',      icon: Eye,    onClick: o => setViewTarget({ offering: o, pal }) },
-    { label: 'View Students',     icon: Users,  onClick: o => setStudTarget(o) },
+    { label: 'View Details',  icon: Eye,    onClick: o => setViewTarget({ offering: o, pal }) },
+    { label: 'View Students', icon: Users,  onClick: o => setStudTarget(o) },
+    { label: 'Edit',          icon: Edit2,  onClick: o => { setEditTarget(o); setShowForm(true) } },
     { divider: true },
-    { label: 'Delete',            icon: Trash2, onClick: o => setDelTarget(o), danger: true },
+    { label: 'Delete',        icon: Trash2, onClick: o => setDelTarget(o), danger: true },
   ]
 
   return (
@@ -485,50 +665,79 @@ export default function OfferingsPage() {
       <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.3rem', paddingBottom: '2rem' }}>
 
         {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.75rem' }}>
           <div>
-            <h1 style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', letterSpacing: '-.02em' }}>Offerings</h1>
-            <p style={{ fontSize: '.78rem', color: 'var(--neu-text-ghost)', marginTop: 2 }}>{offerings.length} course offerings this semester</p>
+            <h1 style={{ fontSize: '1.55rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', lineHeight: 1.2 }}>
+              Course Offerings
+            </h1>
+            <p style={{ fontSize: '.8rem', color: 'var(--neu-text-ghost)', marginTop: '.2rem' }}>
+              {filtered.length} offering{filtered.length !== 1 ? 's' : ''} found
+            </p>
           </div>
-          <button onClick={() => setShowCreate(true)} style={{ display: 'flex', alignItems: 'center', gap: '.5rem', padding: '.65rem 1.25rem', background: 'linear-gradient(145deg,#5b8af0,#3a6bd4)', boxShadow: '0 4px 16px rgba(91,138,240,.38), 6px 6px 14px var(--neu-shadow-dark), -3px -3px 8px var(--neu-shadow-light)', border: '1px solid rgba(255,255,255,.18)', borderRadius: '.9rem', color: '#fff', fontWeight: 700, fontSize: '.82rem', cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
-            <Plus size={16} /> Add Offering
-          </button>
+          <AddButton
+            onClick={() => { setEditTarget(null); setShowForm(true) }}
+            tooltip="Add Offering"
+            color="#5b8af0"
+          />
         </div>
 
-        {/* Filters */}
+        {/* Search + Filter bar */}
         <div style={{ display: 'flex', gap: '.75rem', flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 300 }}>
-            <Search size={14} style={{ position: 'absolute', left: '.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--neu-text-ghost)', pointerEvents: 'none' }} />
-            <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search course, teacher…" style={{ ...iS, paddingLeft: '2.25rem' }} />
+          <div style={{ position: 'relative', flex: 1, minWidth: 220 }}>
+            <Search size={14} style={{ position: 'absolute', left: '.9rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--neu-text-ghost)', pointerEvents: 'none' }} />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search by course, teacher, section…"
+              style={{ ...iS, paddingLeft: '2.4rem' }}
+            />
           </div>
-          <select value={filterSem} onChange={e => setFilterSem(e.target.value)} style={{ ...iS, width: 'auto', minWidth: 180 }}>
+          <select
+            value={filterSem}
+            onChange={e => setFilterSem(e.target.value)}
+            style={{ ...iS, width: 'auto', minWidth: 160 }}
+          >
             <option value="">All Semesters</option>
-            {semesters.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {semesters.map(s => (
+              <option key={s.id} value={String(s.id)}>{s.name}{s.is_active ? ' ★' : ''}</option>
+            ))}
           </select>
         </div>
 
-        {/* Grid */}
+        {/* Cards grid */}
         {loading ? (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(270px,1fr))', gap: '1rem' }}>
             {Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
           </div>
         ) : paginated.length === 0 ? (
           <div style={{ background: 'var(--neu-surface)', border: '1px solid var(--neu-border)', borderRadius: '1.25rem', padding: '4rem 2rem', textAlign: 'center', boxShadow: '6px 6px 16px var(--neu-shadow-dark)' }}>
             <BookOpen size={38} style={{ color: 'var(--neu-text-ghost)', margin: '0 auto .8rem', opacity: .25, display: 'block' }} />
-            <p style={{ fontWeight: 600, color: 'var(--neu-text-secondary)' }}>{search || filterSem ? 'No offerings match' : 'No offerings yet'}</p>
+            <p style={{ fontWeight: 600, color: 'var(--neu-text-secondary)', fontSize: '.9rem' }}>
+              {search || filterSem ? 'No offerings match your filters' : 'No offerings yet'}
+            </p>
+            <p style={{ fontSize: '.78rem', color: 'var(--neu-text-ghost)', marginTop: '.3rem' }}>
+              {search || filterSem ? 'Try changing filters' : 'Click + to create your first offering'}
+            </p>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(280px,1fr))', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(270px,1fr))', gap: '1rem' }}>
             {paginated.map((o, i) => {
               const pal = PALETTE[((page - 1) * PER_PAGE + i) % PALETTE.length]
-              return <OfferingCard key={o.id} offering={o} pal={pal} onContextMenu={e => openMenu(e, o)} />
+              return (
+                <OfferingCard
+                  key={o.id}
+                  offering={o}
+                  pal={pal}
+                  onClick={e => openMenu(e, o)}
+                />
+              )
             })}
           </div>
         )}
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.6rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '.5rem' }}>
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={{ width: 34, height: 34, borderRadius: '.65rem', background: 'var(--neu-surface)', border: '1px solid var(--neu-border)', boxShadow: '4px 4px 10px var(--neu-shadow-dark), -2px -2px 6px var(--neu-shadow-light)', cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? .4 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--neu-text-secondary)' }}>
               <ChevronLeft size={15} />
             </button>
@@ -544,13 +753,17 @@ export default function OfferingsPage() {
         )}
 
         {/* Context menu */}
-        <ContextMenu menu={menu} close={closeMenu} items={menu ? ctxItems(PALETTE[paginated.findIndex(o => o.id === menu.row?.id) % PALETTE.length]) : []} />
+        <ContextMenu
+          menu={menu}
+          close={closeMenu}
+          items={menu ? ctxItems(PALETTE[paginated.findIndex(o => o.id === menu.row?.id) % PALETTE.length]) : []}
+        />
 
         {/* Modals */}
-        {viewTarget  && <ViewModal offering={viewTarget.offering} pal={viewTarget.pal} onClose={() => setViewTarget(null)} />}
-        {studTarget  && <StudentsModal offering={studTarget} onClose={() => setStudTarget(null)} />}
-        {showCreate  && <OfferingModal courses={courses} teachers={teachers} semesters={semesters} onClose={() => setShowCreate(false)} onSuccess={fetchAll} />}
-        {delTarget   && <DeleteModal offering={delTarget} onClose={() => setDelTarget(null)} onConfirm={handleDelete} loading={!!deletingId} />}
+        {viewTarget && <ViewModal    offering={viewTarget.offering} pal={viewTarget.pal} onClose={() => setViewTarget(null)} />}
+        {studTarget && <StudentsModal offering={studTarget} onClose={() => setStudTarget(null)} />}
+        {showForm   && <OfferingModal courses={courses} teachers={teachers} semesters={semesters} offering={editTarget} onClose={() => { setShowForm(false); setEditTarget(null) }} onSuccess={fetchAll} />}
+        {delTarget  && <DeleteModal  offering={delTarget} onClose={() => setDelTarget(null)} onConfirm={handleDelete} loading={!!deletingId} />}
       </div>
     </>
   )

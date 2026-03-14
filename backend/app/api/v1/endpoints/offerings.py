@@ -129,3 +129,21 @@ def get_enrolled_students(
         "total": len(data),
         "students": data
     }, "Enrolled students retrieved")
+
+@router.delete("/{offering_id}")
+def delete_offering(
+    offering_id: int,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin)
+):
+    from sqlalchemy import text
+    offering = OfferingService.get_by_id(db, offering_id)
+    if not offering:
+        return error_response("Offering not found", "NOT_FOUND", status_code=404)
+    try:
+        db.execute(text("DELETE FROM course_offerings WHERE id = :id"), {"id": offering_id})
+        db.commit()
+        return success_response(message="Offering deleted successfully")
+    except Exception as e:
+        db.rollback()
+        return error_response(str(e), "DELETE_FAILED", status_code=400)

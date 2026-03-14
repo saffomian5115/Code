@@ -120,6 +120,7 @@ class EnrollmentService:
             student_id=student_id,
             offering_id=offering_id,
             status="enrolled",
+            is_approved=True, 
             advisor_approval_requested=True
         )
         db.add(enrollment)
