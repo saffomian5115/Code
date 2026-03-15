@@ -658,7 +658,7 @@ CREATE TABLE fee_payments (
     voucher_id INT NOT NULL,
     amount_paid DECIMAL(10,2) NOT NULL,
     payment_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    payment_method ENUM('cash', 'bank_transfer', 'credit_card', 'online') NOT NULL,
+    payment_method ENUM('cash', 'bank_transfer', 'credit_card', 'online', 'cheque') NOT NULL,
     reference_number VARCHAR(100),
     bank_name VARCHAR(100),
     received_by INT,

@@ -353,7 +353,7 @@ def record_payment(
     db: Session = Depends(get_db),
     admin = Depends(require_admin)
 ):
-    payment, error = PaymentService.record(db, voucher_id, request.model_dump())
+    payment, error = PaymentService.record_payment(db, voucher_id, request.model_dump(), received_by=admin.id)
     if error:
         return error_response(error, "PAYMENT_FAILED")
     return success_response({"payment_id": payment.id}, "Payment recorded successfully")

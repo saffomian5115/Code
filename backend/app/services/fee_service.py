@@ -358,7 +358,8 @@ class PaymentService:
             reference_number=data.get("reference_number"),
             bank_name=data.get("bank_name"),
             received_by=received_by,
-            receipt_number=data.get("receipt_number")
+            receipt_number=data.get("receipt_number"),
+            payment_date=data.get("payment_date") or date.today(),
         )
         db.add(payment)
 

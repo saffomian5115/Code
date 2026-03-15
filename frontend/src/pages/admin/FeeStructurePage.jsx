@@ -327,7 +327,7 @@ export default function FeeStructurePage() {
             <h1 style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', letterSpacing: '-.02em' }}>Fee Structure</h1>
             <p style={{ fontSize: '.78rem', color: 'var(--neu-text-ghost)', marginTop: 2 }}>Semester-wise fee per program</p>
           </div>
-          <AddButton onClick={() => setShowCreate(true)} tooltip="Add Structure" color="#5b8af0" />
+          <AddButton onClick={() => { setEditTarget(null); setShowForm(true) }} tooltip="Add Structure" color="#5b8af0" />
 
         </div>
 

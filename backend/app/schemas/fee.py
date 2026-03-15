@@ -5,17 +5,18 @@ from enum import Enum
 
 
 class VoucherStatusEnum(str, Enum):
-    paid = "paid"
-    unpaid = "unpaid"
+    paid    = "paid"
+    unpaid  = "unpaid"
     partial = "partial"
     overdue = "overdue"
 
 
 class PaymentMethodEnum(str, Enum):
-    cash = "cash"
+    cash          = "cash"
     bank_transfer = "bank_transfer"
-    credit_card = "credit_card"
-    online = "online"
+    credit_card   = "credit_card"
+    online        = "online"
+    cheque        = "cheque"       # ← added
 
 
 # ─── FEE STRUCTURE SCHEMAS ──────────────────────────────
@@ -48,42 +49,42 @@ class FeeStructureCreateRequest(BaseModel):
         return v
 
 class FeeStructureUpdateRequest(BaseModel):
-    tuition_fee: Optional[float] = None
+    tuition_fee:   Optional[float] = None
     admission_fee: Optional[float] = None
-    library_fee: Optional[float] = None
-    sports_fee: Optional[float] = None
-    other_fees: Optional[List[OtherFeeItem]] = None
-    valid_to: Optional[date] = None
+    library_fee:   Optional[float] = None
+    sports_fee:    Optional[float] = None
+    other_fees:    Optional[List[OtherFeeItem]] = None
+    valid_to:      Optional[date] = None
 
 
 # ─── FEE VOUCHER SCHEMAS ────────────────────────────────
 
 class VoucherGenerateRequest(BaseModel):
-    student_id: int
+    student_id:  int
     semester_id: int
-    due_date: date
-    remarks: Optional[str] = None
+    due_date:    date
+    remarks:     Optional[str] = None
 
 class BulkVoucherGenerateRequest(BaseModel):
-    # Poori class ke liye ek saath vouchers generate karo
     semester_id: int
-    program_id: int
-    due_date: date
-    remarks: Optional[str] = None
+    program_id:  int
+    due_date:    date
+    remarks:     Optional[str] = None
 
 class VoucherStatusUpdateRequest(BaseModel):
-    status: VoucherStatusEnum
+    status:  VoucherStatusEnum
     remarks: Optional[str] = None
 
 
 # ─── PAYMENT SCHEMAS ────────────────────────────────────
 
 class PaymentCreateRequest(BaseModel):
-    amount_paid: float
-    payment_method: PaymentMethodEnum
+    amount_paid:      float
+    payment_method:   PaymentMethodEnum
     reference_number: Optional[str] = None
-    bank_name: Optional[str] = None
-    receipt_number: Optional[str] = None
+    bank_name:        Optional[str] = None
+    receipt_number:   Optional[str] = None
+    payment_date:     Optional[date] = None     # ← added — frontend se actual date aati hai
 
     @field_validator("amount_paid")
     def amount_positive(cls, v):
@@ -92,5 +93,5 @@ class PaymentCreateRequest(BaseModel):
         return v
 
 class FineCalculateRequest(BaseModel):
-    voucher_id: int
-    fine_per_day: Optional[float] = 50.0    # Default Rs. 50 per day
+    voucher_id:    int
+    fine_per_day:  Optional[float] = 50.0
