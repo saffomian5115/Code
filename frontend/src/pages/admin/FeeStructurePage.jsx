@@ -1,6 +1,3 @@
-// ═══════════════════════════════════════════════════════════════
-//  FeeStructurePage.jsx  —  frontend/src/pages/admin/FeeStructurePage.jsx
-// ═══════════════════════════════════════════════════════════════
 import { useState, useEffect, useMemo } from 'react'
 import {
   Plus, DollarSign, Loader2, Edit2, Trash2, Eye, X,
@@ -8,6 +5,7 @@ import {
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminAPI } from '../../api/admin.api'
+import AddButton from '../../components/ui/AddButton'
 import { useContextMenu, ContextMenu } from '../../hooks/useContextMenu'
 
 /* ─── CSS ────────────────────────────────────────── */
@@ -296,11 +294,18 @@ export default function FeeStructurePage() {
   }, [structures])
 
   const handleDelete = async () => {
-    setDeletingId(delTarget.id)
-    try { await adminAPI.deleteFeeStructure?.(delTarget.id); toast.success('Fee structure deleted'); setDelTarget(null); fetchAll() }
-    catch (e) { toast.error(e.response?.data?.message || 'Cannot delete') }
-    finally { setDeletingId(null) }
+  setDeletingId(delTarget.id)
+  try {
+    await adminAPI.deleteFeeStructure(delTarget.id)
+    toast.success('Fee structure deleted')
+    setDelTarget(null)
+    fetchAll()
+  } catch (e) {
+    toast.error(e.response?.data?.message || 'Cannot delete')
+  } finally {
+    setDeletingId(null)
   }
+}
 
   // Get program accent by its position in grouped keys
   const progKeys = Object.keys(grouped)
@@ -322,9 +327,8 @@ export default function FeeStructurePage() {
             <h1 style={{ fontSize: '1.45rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif', letterSpacing: '-.02em' }}>Fee Structure</h1>
             <p style={{ fontSize: '.78rem', color: 'var(--neu-text-ghost)', marginTop: 2 }}>Semester-wise fee per program</p>
           </div>
-          <button onClick={() => { setEditTarget(null); setShowForm(true) }} style={{ display: 'flex', alignItems: 'center', gap: '.5rem', padding: '.65rem 1.25rem', background: 'linear-gradient(145deg,#22a06b,#1a7d54)', boxShadow: '0 4px 16px rgba(34,160,107,.38), 6px 6px 14px var(--neu-shadow-dark), -3px -3px 8px var(--neu-shadow-light)', border: '1px solid rgba(255,255,255,.18)', borderRadius: '.9rem', color: '#fff', fontWeight: 700, fontSize: '.82rem', cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
-            <Plus size={16} /> Add Structure
-          </button>
+          <AddButton onClick={() => setShowCreate(true)} tooltip="Add Structure" color="#5b8af0" />
+
         </div>
 
         {/* Filter */}
@@ -393,7 +397,7 @@ export default function FeeStructurePage() {
                         <div
                           key={s.id}
                           className="fee-row"
-                          onContextMenu={e => openMenu(e, { ...s, _pal: pal })}
+                          onClick={e => openMenu(e, { ...s, _pal: pal })}
                         >
                           {/* Sem badge */}
                           <div>

@@ -394,3 +394,21 @@ def get_fee_summary(
 ):
     summary = PaymentService.get_fee_summary(db, student_id)
     return success_response(summary, "Fee summary retrieved")
+
+@router.delete("/fee-structure/{structure_id}")
+def delete_fee_structure(
+    structure_id: int,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin)
+):
+    structure = FeeStructureService.get_by_id(db, structure_id)
+    if not structure:
+        return error_response("Fee structure not found", "NOT_FOUND", status_code=404)
+
+    try:
+        db.delete(structure)
+        db.commit()
+        return success_response(message="Fee structure deleted successfully")
+    except Exception as e:
+        db.rollback()
+        return error_response(str(e), "DELETE_FAILED", status_code=400)

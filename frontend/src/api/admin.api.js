@@ -161,6 +161,7 @@ export const adminAPI = {
   getFeeStructure: (id) => api.get(`/fee-structure/${id}`),
   createFeeStructure: (data) => api.post("/fee-structure", data),
   updateFeeStructure: (id, data) => api.put(`/fee-structure/${id}`, data),
+  deleteFeeStructure: (id) => api.delete(`/fee-structure/${id}`),
 
   // ─── FEE VOUCHERS ──────────────────────────────────────
   getVouchers: (params = {}) => {
