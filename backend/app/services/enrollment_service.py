@@ -1,32 +1,22 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 from datetime import datetime, timezone
-from app.models.enrollment import CourseOffering, Enrollment, StudentProgramEnrollment
-from app.models.academic import Semester
+from app.models.enrollment import Enrollment, CourseOffering, StudentProgramEnrollment
 from app.models.user import User
+from app.models.academic import Semester
 
 
 class OfferingService:
 
     @staticmethod
     def create(db: Session, data: dict):
-        # Semester exist check
-        semester = db.query(Semester).filter(
-            Semester.id == data["semester_id"]
-        ).first()
-        if not semester:
-            return None, "Semester not found"
-
-        # Duplicate section check
         existing = db.query(CourseOffering).filter(
             CourseOffering.course_id == data["course_id"],
             CourseOffering.semester_id == data["semester_id"],
             CourseOffering.section == data["section"]
         ).first()
         if existing:
-            return None, "This course section already exists for this semester"
+            return None, "Offering already exists for this course/semester/section"
 
-        # Schedule JSON handle
         if "schedule_json" in data and data["schedule_json"]:
             data["schedule_json"] = [
                 s.model_dump() if hasattr(s, "model_dump") else s
@@ -77,10 +67,22 @@ class OfferingService:
 
     @staticmethod
     def get_enrolled_students(db: Session, offering_id: int):
+        """Returns only currently 'enrolled' status — used by teacher attendance."""
         enrollments = db.query(Enrollment).filter(
             Enrollment.offering_id == offering_id,
             Enrollment.status == "enrolled"
         ).all()
+        return enrollments
+
+    @staticmethod
+    def get_all_students(db: Session, offering_id: int):
+        """
+        Returns ALL enrollments for an offering regardless of status.
+        Used by admin Enrollments page — shows enrolled, dropped, completed, failed.
+        """
+        enrollments = db.query(Enrollment).filter(
+            Enrollment.offering_id == offering_id
+        ).order_by(Enrollment.enrollment_date.desc()).all()
         return enrollments
 
 
@@ -109,23 +111,31 @@ class EnrollmentService:
             Enrollment.offering_id == offering_id
         ).first()
         if existing:
+            # If previously dropped, re-enroll
+            if existing.status == "dropped":
+                existing.status = "enrolled"
+                existing.is_approved = True
+                offering.enrolled_students += 1
+                db.commit()
+                db.refresh(existing)
+                return existing, None
             return None, "Student already enrolled in this course"
 
         # Capacity check
         if offering.enrolled_students >= offering.max_students:
             return None, "Course is full — maximum capacity reached"
 
-        # Enrollment banao
+        # Admin enrolls directly → auto-approved, no advisor flag needed
         enrollment = Enrollment(
             student_id=student_id,
             offering_id=offering_id,
             status="enrolled",
-            is_approved=True, 
-            advisor_approval_requested=True
+            is_approved=True,
+            advisor_approval_requested=False
         )
         db.add(enrollment)
 
-        # Count update karo
+        # Count update
         offering.enrolled_students += 1
         db.commit()
         db.refresh(enrollment)
@@ -210,7 +220,7 @@ class EnrollmentService:
 
     @staticmethod
     def get_pending_approvals(db: Session, advisor_id: int):
-        # Advisor ke pending approvals
+        """Advisor ke pending approvals — teacher portal use karta hai."""
         return db.query(Enrollment).join(CourseOffering).filter(
             CourseOffering.instructor_id == advisor_id,
             Enrollment.advisor_approval_requested == True,
@@ -223,7 +233,6 @@ class StudentProgramService:
 
     @staticmethod
     def enroll_in_program(db: Session, data: dict):
-        # Already enrolled check
         existing = db.query(StudentProgramEnrollment).filter(
             StudentProgramEnrollment.student_id == data["student_id"],
             StudentProgramEnrollment.program_id == data["program_id"]
@@ -249,7 +258,7 @@ class StudentProgramService:
             StudentProgramEnrollment.id == enrollment_id
         ).first()
         if not enrollment:
-            return None, "Program enrollment not found"
+            return None, "Enrollment not found"
 
         for key, value in data.items():
             setattr(enrollment, key, value)
@@ -259,8 +268,8 @@ class StudentProgramService:
         return enrollment, None
 
     @staticmethod
-    def calculate_cgpa(db: Session, student_id: int):
-        # Completed enrollments with grades
+    def calculate_cgpa(db: Session, student_id: int) -> float:
+        """Student ki completed enrollments se CGPA calculate karo."""
         enrollments = db.query(Enrollment).filter(
             Enrollment.student_id == student_id,
             Enrollment.status == "completed",
@@ -268,14 +277,15 @@ class StudentProgramService:
         ).all()
 
         if not enrollments:
-            return 0.0
+            return None
 
-        total_points = 0.0
-        total_courses = 0
+        total_points = sum(
+            float(e.grade_points) * (e.offering.course.credit_hours if e.offering and e.offering.course else 3)
+            for e in enrollments
+        )
+        total_credits = sum(
+            e.offering.course.credit_hours if e.offering and e.offering.course else 3
+            for e in enrollments
+        )
 
-        for e in enrollments:
-            total_points += float(e.grade_points)
-            total_courses += 1
-
-        cgpa = round(total_points / total_courses, 2)
-        return cgpa
+        return round(total_points / total_credits, 2) if total_credits > 0 else None

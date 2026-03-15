@@ -43,6 +43,7 @@ def get_offerings(
         "course_name": o.course.name if o.course else None,
         "section": o.section,
         "semester_name": o.semester.name if o.semester else None,
+        "semester_id": o.semester_id,
         "instructor_name": o.instructor.full_name if o.instructor else None,
         "enrolled_students": o.enrolled_students,
         "max_students": o.max_students,
@@ -113,22 +114,40 @@ def get_enrolled_students(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    enrollments = OfferingService.get_enrolled_students(db, offering_id)
+    """
+    Returns all enrollments for an offering (all statuses).
+    Admin uses this for the Enrollments page.
+    grade_letter, grade_points (gpa_points), enrollment_date included.
+    is_approved intentionally excluded — admin enrolls directly (auto-approved).
+    """
+    enrollments = OfferingService.get_all_students(db, offering_id)
     data = [{
         "enrollment_id": e.id,
         "student_id": e.student_id,
         "roll_number": e.student.roll_number if e.student else None,
-        "full_name": e.student.student_profile.full_name if e.student and e.student.student_profile else None,
+        "full_name": e.student.student_profile.full_name
+            if e.student and e.student.student_profile else None,
         "status": e.status,
-        "is_approved": e.is_approved,
-        "enrollment_date": str(e.enrollment_date)
+        "grade_letter": e.grade_letter,
+        "gpa_points": float(e.grade_points) if e.grade_points is not None else None,
+        "enrollment_date": str(e.enrollment_date),
+        "advisor_remarks": e.advisor_remarks,
     } for e in enrollments]
+
+    # Summary counts
+    counts = {"enrolled": 0, "dropped": 0, "completed": 0, "failed": 0}
+    for e in enrollments:
+        s = e.status
+        if s in counts:
+            counts[s] += 1
 
     return success_response({
         "offering_id": offering_id,
         "total": len(data),
+        "counts": counts,
         "students": data
     }, "Enrolled students retrieved")
+
 
 @router.delete("/{offering_id}")
 def delete_offering(
