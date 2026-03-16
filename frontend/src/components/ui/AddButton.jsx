@@ -4,7 +4,7 @@ import { Plus } from 'lucide-react'
 
 const BASE = 44, MAX = 58, RADIUS = 13, DIST = 100
 
-export default function AddButton({ onClick, tooltip = 'Add', color = '#9b59b6' }) {
+export default function AddButton({ onClick, tooltip = 'Add', color = '#9b59b6', Icon = Plus }) {
   const wrapRef = useRef(null)
   const [size, setSize] = useState(BASE)
   const [showTip, setShowTip] = useState(false)
@@ -52,7 +52,7 @@ export default function AddButton({ onClick, tooltip = 'Add', color = '#9b59b6' 
           transition: 'width 0.14s cubic-bezier(0.34,1.56,0.64,1), height 0.14s cubic-bezier(0.34,1.56,0.64,1), border-radius 0.14s ease',
         }}
       >
-        <Plus size={Math.round(size * 0.42)} />
+        <Icon size={Math.round(size * 0.42)} />
       </button>
 
       {showTip && tipPos && createPortal(

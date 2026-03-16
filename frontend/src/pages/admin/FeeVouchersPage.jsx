@@ -1,16 +1,17 @@
 // ═══════════════════════════════════════════════════════════════
 //  FeeVouchersPage.jsx  —  frontend/src/pages/admin/FeeVouchersPage.jsx
 // ═══════════════════════════════════════════════════════════════
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  CreditCard, Search, Loader2, X, Plus, DollarSign,
+  CreditCard, Search, Loader2,  X, Plus, DollarSign,
   ChevronLeft, ChevronRight, AlertTriangle, CheckCircle2,
   Clock, Eye, Layers, RefreshCw, Banknote, Smartphone,
   Building2, BookCheck,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { adminAPI } from '../../api/admin.api'
+import AddButton from '../../components/ui/AddButton'
 import { formatDate, formatCurrency } from '../../utils/helpers'
 import { useContextMenu, ContextMenu } from '../../hooks/useContextMenu'
 
@@ -20,11 +21,11 @@ import { useContextMenu, ContextMenu } from '../../hooks/useContextMenu'
 const CSS = `
   @keyframes spin    { to { transform: rotate(360deg) } }
   @keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:.45} }
-  @keyframes neu-slide-up { from{opacity:0;transform:translateY(14px) scale(.97)} to{opacity:1;transform:none} }
+  @keyframes neu-slide-up { from{opacity:0;transform:translateY(8px) scale(.97)} to{opacity:1;transform:none} }
 
   .vchr-row {
     display: grid;
-    grid-template-columns: 130px 2fr 90px 70px 100px 90px;
+    grid-template-columns: 130px 2fr 90px 70px 110px 90px;
     align-items: center;
     gap: .5rem;
     padding: .75rem 1rem;
@@ -43,7 +44,7 @@ const CSS = `
 
   .vchr-header {
     display: grid;
-    grid-template-columns: 130px 2fr 90px 70px 100px 90px;
+    grid-template-columns: 130px 2fr 90px 70px 110px 90px;
     gap: .5rem;
     padding: .25rem 1rem;
     font-size: .6rem; font-weight: 700;
@@ -51,50 +52,13 @@ const CSS = `
     color: var(--neu-text-ghost);
   }
 
-  /* ── Deck-style filter rail (sidebar theme) ── */
-  .filter-deck {
-    display: flex;
-    flex-direction: column;
-    gap: .3rem;
-    padding: .4rem;
-    background: var(--neu-surface);
-    border: 1px solid var(--neu-border);
-    border-radius: 1rem;
-    box-shadow: 4px 4px 12px var(--neu-shadow-dark), -2px -2px 8px var(--neu-shadow-light);
-  }
-  .deck-btn {
-    width: 38px; height: 38px;
-    border-radius: .7rem;
-    border: 1.5px solid transparent;
-    background: none;
-    display: flex; align-items: center; justify-content: center;
-    cursor: pointer;
-    transition: all .16s ease;
-    position: relative;
-    flex-shrink: 0;
-  }
-  .deck-btn:hover   { background: var(--neu-surface-deep); border-color: var(--neu-border); }
-  .deck-btn.d-act   { border-color: currentColor; }
-  .deck-btn.d-all.d-act   { background: rgba(91,138,240,.13); color: #5b8af0; }
-  .deck-btn.d-paid.d-act  { background: rgba(34,160,107,.13); color: #22a06b; }
-  .deck-btn.d-unpaid.d-act{ background: rgba(239,68,68,.13);  color: #ef4444; }
-  .deck-btn.d-overdue.d-act{ background: rgba(249,115,22,.13);color: #f97316; }
-  .deck-btn.d-partial.d-act{ background: rgba(91,138,240,.1); color: #5b8af0; }
-
-  .deck-tip {
-    position: fixed;
-    background: var(--neu-surface);
-    border: 1px solid var(--neu-border);
-    box-shadow: 4px 4px 12px var(--neu-shadow-dark), -2px -2px 6px var(--neu-shadow-light);
-    color: var(--neu-text-primary);
-    font-size: .72rem; font-weight: 700;
-    padding: .28rem .7rem;
-    border-radius: .5rem;
-    white-space: nowrap;
-    pointer-events: none;
-    z-index: 99999;
-    animation: neu-slide-up .1s ease both;
-  }
+  
+  .deck-btn.d-act { border-color: currentColor; }
+  .deck-btn.d-all.d-act    { background: rgba(91,138,240,.13);  color: #5b8af0; }
+  .deck-btn.d-paid.d-act   { background: rgba(34,160,107,.13);  color: #22a06b; }
+  .deck-btn.d-unpaid.d-act { background: rgba(239,68,68,.13);   color: #ef4444; }
+  .deck-btn.d-overdue.d-act{ background: rgba(249,115,22,.13);  color: #f97316; }
+  .deck-btn.d-partial.d-act{ background: rgba(91,138,240,.1);   color: #5b8af0; }
 
   .pg-btn {
     width: 30px; height: 30px; border-radius: .55rem;
@@ -111,7 +75,7 @@ const CSS = `
 `
 
 /* ═══════════════════════════════════════════════════
-   HELPERS / SHARED
+   SHARED HELPERS
 ═══════════════════════════════════════════════════ */
 const iS = {
   background: 'var(--neu-surface-deep)',
@@ -135,7 +99,6 @@ const STATUS_CFG = {
   partial: { c: '#5b8af0', bg: 'rgba(91,138,240,.1)',  Icon: Clock,         label: 'Partial' },
 }
 
-// fields visible per payment method
 const METHOD_FIELDS = {
   cash:          { ref: false, bank: false, receipt: true  },
   bank_transfer: { ref: true,  bank: true,  receipt: true  },
@@ -188,7 +151,7 @@ function MFoot({ onClose, onConfirm, confirmLabel, confirmColor = 'linear-gradie
 }
 
 /* ═══════════════════════════════════════════════════
-   DECK FILTER (sidebar-style icon rail)
+   DECK FILTER — horizontal + magnify
 ═══════════════════════════════════════════════════ */
 const DECK_ITEMS = [
   { key: '',        label: 'All',     Icon: Layers,        cls: 'd-all',     color: '#5b8af0' },
@@ -199,44 +162,38 @@ const DECK_ITEMS = [
 ]
 
 function DeckFilter({ active, onChange, counts, total }) {
-  const [tip, setTip] = useState(null) // { label, x, y }
+  const [tip, setTip] = useState(null)
+
+  const getCount = (key) => key === '' ? total : (counts[key] ?? 0)
 
   const handleEnter = (e, label) => {
     const r = e.currentTarget.getBoundingClientRect()
-    setTip({ label, x: r.right + 10, y: r.top + r.height / 2 })
-  }
-
-  const getCount = (key) => {
-    if (key === '') return total
-    return counts[key] ?? 0
+    // Tooltip neeche aata hai (horizontal deck)
+    setTip({ label, x: r.left + r.width / 2, y: r.bottom + 8 })
   }
 
   return (
     <>
       <div className="filter-deck">
-        {DECK_ITEMS.map(({ key, label, Icon, cls, color }) => (
-          <button
-            key={key}
-            className={`deck-btn ${cls}${active === key ? ' d-act' : ''}`}
-            style={{ color: active === key ? color : 'var(--neu-text-ghost)' }}
-            onClick={() => onChange(key)}
-            onMouseEnter={e => handleEnter(e, `${label} (${getCount(key)})`)}
-            onMouseLeave={() => setTip(null)}
-          >
-            <Icon size={16} />
-            {active === key && (
-              <span style={{
-                position: 'absolute', top: 2, right: 3,
-                width: 7, height: 7, borderRadius: '50%',
-                background: color,
-                boxShadow: `0 0 4px ${color}`,
-              }} />
-            )}
-          </button>
-        ))}
+        {DECK_ITEMS.map(({ key, label, Icon, cls, color }) => {
+          const isAct = active === key
+          return (
+            <button
+              key={key}
+              className={`deck-btn ${cls}${isAct ? ' d-act' : ''}`}
+              style={{ color: isAct ? color : 'var(--neu-text-ghost)' }}
+              onClick={() => onChange(key)}
+              onMouseEnter={e => handleEnter(e, `${label} (${getCount(key)})`)}
+              onMouseLeave={() => setTip(null)}
+            >
+              <Icon size={15} />
+              {isAct && <span className="deck-dot" style={{ background: color, boxShadow: `0 0 4px ${color}` }} />}
+            </button>
+          )
+        })}
       </div>
       {tip && createPortal(
-        <div className="deck-tip" style={{ top: tip.y, left: tip.x, transform: 'translateY(-50%)' }}>
+        <div className="deck-tip" style={{ top: tip.y, left: tip.x, transform: 'translateX(-50%)' }}>
           {tip.label}
         </div>,
         document.body
@@ -251,26 +208,27 @@ function DeckFilter({ active, onChange, counts, total }) {
 function ViewModal({ voucher: v, onClose, onPay }) {
   const sc   = STATUS_CFG[v.status] || STATUS_CFG.unpaid
   const tile = { background: 'var(--neu-surface-deep)', borderRadius: '.8rem', padding: '.7rem 1rem', boxShadow: 'inset 2px 2px 5px var(--neu-shadow-dark), inset -1px -1px 4px var(--neu-shadow-light)' }
-  const pct  = v.total_due > 0 ? Math.min(((v.total_paid || 0) / v.total_due) * 100, 100) : 0
+  const totalPaid = v.total_paid || 0
+  const totalDue  = v.total_due  || 0
+  const remaining = Math.max(totalDue - totalPaid, 0)
+  const pct = totalDue > 0 ? Math.min((totalPaid / totalDue) * 100, 100) : 0
 
   return (
     <Modal onClose={onClose}>
       <MHead icon={sc.Icon} title="Voucher Detail" sub={v.voucher_number} onClose={onClose} iconColor={sc.c} />
       <div style={{ padding: '1rem 1.4rem', display: 'flex', flexDirection: 'column', gap: '.55rem', overflowY: 'auto' }}>
 
-        {/* Student */}
         <div style={tile}>
           <p style={{ fontSize: '.62rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: '.25rem' }}>Student</p>
           <p style={{ fontSize: '.9rem', fontWeight: 700, color: 'var(--neu-text-primary)' }}>{v.student_name}</p>
           <p style={{ fontSize: '.7rem', color: 'var(--neu-text-ghost)', fontFamily: 'monospace' }}>{v.roll_number}</p>
         </div>
 
-        {/* Amount tiles */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '.5rem' }}>
           {[
-            { label: 'Base Amount', value: formatCurrency(v.amount),       c: '#5b8af0' },
+            { label: 'Base Amount', value: formatCurrency(v.amount),      c: '#5b8af0' },
             { label: 'Fine',        value: v.fine_amount > 0 ? formatCurrency(v.fine_amount) : '—', c: '#f97316' },
-            { label: 'Total Due',   value: formatCurrency(v.total_due),    c: '#ef4444' },
+            { label: 'Total Due',   value: formatCurrency(totalDue),      c: '#ef4444' },
           ].map(t => (
             <div key={t.label} style={{ ...tile, textAlign: 'center' }}>
               <p style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: '.2rem' }}>{t.label}</p>
@@ -279,7 +237,6 @@ function ViewModal({ voucher: v, onClose, onPay }) {
           ))}
         </div>
 
-        {/* Progress */}
         <div style={tile}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '.4rem', fontSize: '.78rem' }}>
             <span style={{ color: 'var(--neu-text-muted)' }}>Payment Progress</span>
@@ -289,12 +246,11 @@ function ViewModal({ voucher: v, onClose, onPay }) {
             <div style={{ height: '100%', width: `${pct}%`, background: sc.c, borderRadius: 99, transition: 'width .4s ease' }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '.35rem', fontSize: '.7rem' }}>
-            <span style={{ color: '#22a06b', fontWeight: 600 }}>Paid: {formatCurrency(v.total_paid || 0)}</span>
-            <span style={{ color: '#ef4444', fontWeight: 600 }}>Remaining: {formatCurrency((v.total_due || 0) - (v.total_paid || 0))}</span>
+            <span style={{ color: '#22a06b', fontWeight: 600 }}>Paid: {formatCurrency(totalPaid)}</span>
+            <span style={{ color: '#ef4444', fontWeight: 600 }}>Remaining: {formatCurrency(remaining)}</span>
           </div>
         </div>
 
-        {/* Due date + Status */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.5rem' }}>
           <div style={tile}>
             <p style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: '.2rem' }}>Due Date</p>
@@ -305,24 +261,6 @@ function ViewModal({ voucher: v, onClose, onPay }) {
             <span style={{ fontSize: '.82rem', fontWeight: 700, color: sc.c, textTransform: 'capitalize' }}>{v.status}</span>
           </div>
         </div>
-
-        {/* Fee breakdown */}
-        {(v.tuition_fee || v.admission_fee || v.library_fee) && (
-          <div style={tile}>
-            <p style={{ fontSize: '.62rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: '.4rem' }}>Fee Breakdown</p>
-            {[
-              { label: 'Tuition',   val: v.tuition_fee   },
-              { label: 'Admission', val: v.admission_fee },
-              { label: 'Library',   val: v.library_fee   },
-              { label: 'Sports',    val: v.sports_fee    },
-            ].filter(f => f.val > 0).map(f => (
-              <div key={f.label} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.78rem', marginBottom: '.2rem' }}>
-                <span style={{ color: 'var(--neu-text-muted)' }}>{f.label} Fee</span>
-                <span style={{ fontWeight: 700, color: 'var(--neu-text-primary)' }}>{formatCurrency(f.val)}</span>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       <div style={{ padding: '.9rem 1.4rem', borderTop: '1px solid var(--neu-border)', display: 'flex', gap: '.6rem', flexShrink: 0 }}>
@@ -338,12 +276,15 @@ function ViewModal({ voucher: v, onClose, onPay }) {
 }
 
 /* ═══════════════════════════════════════════════════
-   PAY MODAL  — fields change per method
+   PAY MODAL
 ═══════════════════════════════════════════════════ */
 function PayModal({ voucher: v, onClose, onSuccess }) {
-  const remaining = Math.max((v.total_due || 0) - (v.total_paid || 0), 0)
+  const totalPaid = v.total_paid || 0
+  const totalDue  = v.total_due  || 0
+  const remaining = Math.max(totalDue - totalPaid, 0)
+
   const [form, setForm] = useState({
-    amount_paid:      remaining > 0 ? remaining : v.total_due,
+    amount_paid:      remaining > 0 ? remaining : totalDue,
     payment_method:   'bank_transfer',
     reference_number: '',
     bank_name:        '',
@@ -354,23 +295,17 @@ function PayModal({ voucher: v, onClose, onSuccess }) {
   const set = (k, val) => setForm(p => ({ ...p, [k]: val }))
 
   const fields = METHOD_FIELDS[form.payment_method] || METHOD_FIELDS.bank_transfer
-
-  // method label map for placeholders
   const methodMeta = {
-    cash:          { refLabel: null,                    bankLabel: null,              icon: Banknote    },
-    bank_transfer: { refLabel: 'Transaction ID',        bankLabel: 'Bank Name',       icon: Building2   },
-    online:        { refLabel: 'Transaction / Ref No',  bankLabel: 'Platform (e.g. JazzCash)', icon: Smartphone },
-    cheque:        { refLabel: 'Cheque Number',         bankLabel: 'Bank Name',       icon: BookCheck   },
+    cash:          { refLabel: null,                           bankLabel: null,                     icon: Banknote   },
+    bank_transfer: { refLabel: 'Transaction ID',               bankLabel: 'Bank Name',              icon: Building2  },
+    online:        { refLabel: 'Transaction / Ref No',         bankLabel: 'Platform (e.g. JazzCash)', icon: Smartphone },
+    cheque:        { refLabel: 'Cheque Number',                bankLabel: 'Bank Name',              icon: BookCheck  },
   }
   const meta = methodMeta[form.payment_method]
 
   const submit = async () => {
-    if (!form.amount_paid || parseFloat(form.amount_paid) <= 0) {
-      return toast.error('Enter a valid amount')
-    }
-    if (fields.ref && !form.reference_number.trim()) {
-      return toast.error(`${meta.refLabel} is required`)
-    }
+    if (!form.amount_paid || parseFloat(form.amount_paid) <= 0) return toast.error('Enter a valid amount')
+    if (fields.ref && !form.reference_number.trim()) return toast.error(`${meta.refLabel} is required`)
     setLoading(true)
     try {
       await adminAPI.payVoucher(v.id, form)
@@ -387,25 +322,23 @@ function PayModal({ voucher: v, onClose, onSuccess }) {
       <MHead icon={DollarSign} title="Record Payment" sub={v.voucher_number} onClose={onClose} iconColor="#22a06b" />
       <div style={{ padding: '1.1rem 1.4rem', display: 'flex', flexDirection: 'column', gap: '.8rem', overflowY: 'auto' }}>
 
-        {/* Summary bar */}
-        <div style={{ padding: '.8rem 1rem', borderRadius: '.9rem', background: 'rgba(91,138,240,.07)', border: '1px solid rgba(91,138,240,.18)', display: 'flex', flexDirection: 'column', gap: '.25rem' }}>
+        {/* Summary */}
+        <div style={{ padding: '.8rem 1rem', borderRadius: '.9rem', background: 'rgba(91,138,240,.07)', border: '1px solid rgba(91,138,240,.18)' }}>
           {[
-            { l: 'Total Due',     v: formatCurrency(v.total_due),       bold: false },
-            { l: 'Already Paid',  v: formatCurrency(v.total_paid || 0), bold: false, green: true },
-            { l: 'Remaining',     v: formatCurrency(remaining),         bold: true,  red: true   },
+            { l: 'Total Due',    v: formatCurrency(totalDue),   bold: false },
+            { l: 'Already Paid', v: formatCurrency(totalPaid),  bold: false, green: true },
+            { l: 'Remaining',    v: formatCurrency(remaining),  bold: true,  red: true },
           ].map(r => (
-            <div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: r.bold ? '.85rem' : '.78rem', borderTop: r.bold ? '1px solid rgba(91,138,240,.18)' : 'none', paddingTop: r.bold ? '.25rem' : 0 }}>
+            <div key={r.l} style={{ display: 'flex', justifyContent: 'space-between', fontSize: r.bold ? '.85rem' : '.78rem', borderTop: r.bold ? '1px solid rgba(91,138,240,.18)' : 'none', paddingTop: r.bold ? '.25rem' : 0, marginBottom: r.bold ? 0 : '.2rem' }}>
               <span style={{ color: 'var(--neu-text-muted)', fontWeight: r.bold ? 700 : 400 }}>{r.l}</span>
               <span style={{ fontWeight: r.bold ? 800 : 600, color: r.red ? '#ef4444' : r.green ? '#22a06b' : 'var(--neu-text-primary)', fontFamily: r.bold ? 'Outfit,sans-serif' : 'inherit' }}>{r.v}</span>
             </div>
           ))}
         </div>
 
-        {/* Amount + Method */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
           <F label="Amount *">
-            <input style={iS} type="number" min="1" value={form.amount_paid}
-              onChange={e => set('amount_paid', e.target.value)} placeholder="0" />
+            <input style={iS} type="number" min="1" value={form.amount_paid} onChange={e => set('amount_paid', e.target.value)} />
           </F>
           <F label="Payment Method">
             <select style={iS} value={form.payment_method} onChange={e => set('payment_method', e.target.value)}>
@@ -417,36 +350,29 @@ function PayModal({ voucher: v, onClose, onSuccess }) {
           </F>
         </div>
 
-        {/* Conditional fields */}
         {fields.ref && (
           <F label={`${meta.refLabel} *`}>
-            <input style={iS} value={form.reference_number}
-              onChange={e => set('reference_number', e.target.value)}
+            <input style={iS} value={form.reference_number} onChange={e => set('reference_number', e.target.value)}
               placeholder={form.payment_method === 'cheque' ? 'e.g. CHQ-00123' : 'e.g. TXN-2025-001'} />
           </F>
         )}
-
         {fields.bank && (
           <F label={meta.bankLabel}>
-            <input style={iS} value={form.bank_name}
-              onChange={e => set('bank_name', e.target.value)}
+            <input style={iS} value={form.bank_name} onChange={e => set('bank_name', e.target.value)}
               placeholder={form.payment_method === 'online' ? 'e.g. JazzCash' : 'e.g. HBL'} />
           </F>
         )}
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.75rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: fields.receipt ? '1fr 1fr' : '1fr', gap: '.75rem' }}>
           {fields.receipt && (
             <F label="Receipt Number">
-              <input style={iS} value={form.receipt_number}
-                onChange={e => set('receipt_number', e.target.value)} placeholder="RCP-001" />
+              <input style={iS} value={form.receipt_number} onChange={e => set('receipt_number', e.target.value)} placeholder="RCP-001" />
             </F>
           )}
           <F label="Payment Date">
-            <input style={iS} type="date" value={form.payment_date}
-              onChange={e => set('payment_date', e.target.value)} />
+            <input style={iS} type="date" value={form.payment_date} onChange={e => set('payment_date', e.target.value)} />
           </F>
         </div>
-
       </div>
       <MFoot onClose={onClose} onConfirm={submit} confirmLabel="Record Payment" loading={loading} />
     </Modal>
@@ -454,41 +380,28 @@ function PayModal({ voucher: v, onClose, onSuccess }) {
 }
 
 /* ═══════════════════════════════════════════════════
-   GENERATE VOUCHER MODAL
+   GENERATE MODAL
 ═══════════════════════════════════════════════════ */
 function GenerateModal({ onClose, onSuccess }) {
   const [students,    setStudents]    = useState([])
   const [semesters,   setSemesters]   = useState([])
-  const [form,        setForm]        = useState({
-    student_id: '', semester_id: '',
-    due_date: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-  })
+  const [form,        setForm]        = useState({ student_id: '', semester_id: '', due_date: new Date(Date.now() + 30*24*60*60*1000).toISOString().split('T')[0] })
   const [loading,     setLoading]     = useState(false)
   const [loadingData, setLoadingData] = useState(true)
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
 
   useEffect(() => {
     Promise.all([adminAPI.getStudents(1, 500), adminAPI.getSemesters()])
-      .then(([s, sem]) => {
-        setStudents(s.data.data?.students || [])
-        setSemesters(sem.data.data?.semesters || [])
-      })
+      .then(([s, sem]) => { setStudents(s.data.data?.students || []); setSemesters(sem.data.data?.semesters || []) })
       .finally(() => setLoadingData(false))
   }, [])
 
   const submit = async () => {
-    if (!form.student_id || !form.semester_id || !form.due_date) {
-      return toast.error('All fields are required')
-    }
+    if (!form.student_id || !form.semester_id || !form.due_date) return toast.error('All fields required')
     setLoading(true)
-    try {
-      await adminAPI.createVoucher(form)
-      toast.success('Voucher generated!')
-      onSuccess()
-      onClose()
-    } catch (e) {
-      toast.error(e.response?.data?.message || 'Failed')
-    } finally { setLoading(false) }
+    try { await adminAPI.createVoucher(form); toast.success('Voucher generated!'); onSuccess(); onClose() }
+    catch (e) { toast.error(e.response?.data?.message || 'Failed') }
+    finally { setLoading(false) }
   }
 
   return (
@@ -526,50 +439,36 @@ function GenerateModal({ onClose, onSuccess }) {
 }
 
 /* ═══════════════════════════════════════════════════
-   VOUCHER ROW — onClick opens context menu
+   VOUCHER ROW
 ═══════════════════════════════════════════════════ */
-function VoucherRow({ v, onRowClick, actionLoading }) {
+function VoucherRow({ v, onRowClick }) {
   const sc        = STATUS_CFG[v.status] || STATUS_CFG.unpaid
   const isPastDue = new Date(v.due_date) < new Date() && v.status !== 'paid'
-  const pct       = v.total_due > 0 ? Math.min(((v.total_paid || 0) / v.total_due) * 100, 100) : 0
+  const totalDue  = v.total_due  || 0
+  const totalPaid = v.total_paid || 0
+  const pct       = totalDue > 0 ? Math.min((totalPaid / totalDue) * 100, 100) : 0
 
   return (
     <div className={`vchr-row st-${v.status}`} onClick={e => onRowClick(e, v)}>
-
-      {/* Voucher No */}
       <span style={{ fontSize: '.72rem', fontWeight: 800, color: '#5b8af0', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
         {v.voucher_number}
       </span>
-
-      {/* Student */}
       <div style={{ minWidth: 0 }}>
         <p style={{ fontSize: '.84rem', fontWeight: 600, color: 'var(--neu-text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.student_name}</p>
         <p style={{ fontSize: '.64rem', color: 'var(--neu-text-ghost)', fontFamily: 'monospace' }}>{v.roll_number}</p>
       </div>
-
-      {/* Amount */}
-      <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>
-        {formatCurrency(v.total_due)}
-      </span>
-
-      {/* Fine */}
+      <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>{formatCurrency(totalDue)}</span>
       {v.fine_amount > 0
         ? <span style={{ fontSize: '.78rem', fontWeight: 700, color: '#f97316', fontFamily: 'Outfit,sans-serif' }}>{formatCurrency(v.fine_amount)}</span>
         : <span style={{ fontSize: '.7rem', color: 'var(--neu-text-ghost)', opacity: .4 }}>—</span>
       }
-
-      {/* Progress */}
       <div>
-        <div style={{ height: 5, background: 'var(--neu-surface-deep)', borderRadius: 99, overflow: 'hidden', boxShadow: 'inset 1px 1px 3px var(--neu-shadow-dark)', marginBottom: '.2rem' }}>
+        <div style={{ height: 5, background: 'var(--neu-surface-deep)', borderRadius: 99, overflow: 'hidden', boxShadow: 'inset 1px 1px 3px var(--neu-shadow-dark)', marginBottom: '.18rem' }}>
           <div style={{ height: '100%', width: `${pct}%`, background: sc.c, borderRadius: 99 }} />
         </div>
-        <span style={{ fontSize: '.6rem', color: 'var(--neu-text-ghost)' }}>{pct.toFixed(0)}% paid</span>
+        <span style={{ fontSize: '.6rem', color: 'var(--neu-text-ghost)' }}>{pct.toFixed(0)}% · {formatCurrency(totalPaid)} paid</span>
       </div>
-
-      {/* Due date */}
-      <span style={{ fontSize: '.72rem', fontWeight: 600, color: isPastDue ? '#ef4444' : 'var(--neu-text-primary)' }}>
-        {formatDate(v.due_date)}
-      </span>
+      <span style={{ fontSize: '.72rem', fontWeight: 600, color: isPastDue ? '#ef4444' : 'var(--neu-text-primary)' }}>{formatDate(v.due_date)}</span>
     </div>
   )
 }
@@ -606,28 +505,18 @@ export default function FeeVouchersPage() {
 
   const handleUpdateOverdue = async () => {
     setUpdatingOverdue(true)
-    try {
-      const res = await adminAPI.updateOverdueVouchers()
-      toast.success(`${res.data.data?.updated_count || 0} vouchers updated`)
-      fetchVouchers()
-    } catch { toast.error('Failed to update overdue') }
+    try { const res = await adminAPI.updateOverdueVouchers(); toast.success(`${res.data.data?.updated_count || 0} vouchers updated`); fetchVouchers() }
+    catch { toast.error('Failed') }
     finally { setUpdatingOverdue(false) }
   }
 
-  // context menu items
   const ctxItems = (v) => [
     { label: 'View Details',    icon: Eye,        onClick: () => setViewVoucher(v) },
-    ...(v.status !== 'paid' ? [
-      { label: 'Record Payment', icon: DollarSign, onClick: () => setPayVoucher(v) },
-    ] : []),
+    ...(v.status !== 'paid' ? [{ label: 'Record Payment', icon: DollarSign, onClick: () => setPayVoucher(v) }] : []),
   ]
 
-  const handleRowClick = (e, v) => openMenu(e, v)
-
   const filtered = vouchers.filter(v =>
-    !search ||
-    v.student_name?.toLowerCase().includes(search.toLowerCase()) ||
-    v.voucher_number?.toLowerCase().includes(search.toLowerCase())
+    !search || v.student_name?.toLowerCase().includes(search.toLowerCase()) || v.voucher_number?.toLowerCase().includes(search.toLowerCase())
   )
 
   const counts = {
@@ -641,10 +530,10 @@ export default function FeeVouchersPage() {
   return (
     <>
       <style>{CSS}</style>
-      <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: '2rem' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', paddingBottom: '2rem', display: 'flex', flexDirection: 'column', gap: '1.3rem' }}>
 
-        {/* ── Header ── */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.75rem', marginBottom: '1.3rem' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '.7rem' }}>
             <div style={{ width: 42, height: 42, borderRadius: '.9rem', background: 'rgba(34,160,107,.12)', boxShadow: '5px 5px 14px var(--neu-shadow-dark), -3px -3px 10px var(--neu-shadow-light)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <CreditCard size={20} style={{ color: '#22a06b' }} />
@@ -654,24 +543,22 @@ export default function FeeVouchersPage() {
               <p style={{ fontSize: '.78rem', color: 'var(--neu-text-ghost)', marginTop: 2 }}>Manage and track student fee payments</p>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '.6rem', alignItems: 'center' }}>
-            <button onClick={handleUpdateOverdue} disabled={updatingOverdue} style={{ display: 'flex', alignItems: 'center', gap: '.4rem', padding: '.55rem 1rem', border: '1.5px solid var(--neu-border)', borderRadius: '.8rem', background: 'var(--neu-surface-deep)', color: 'var(--neu-text-secondary)', fontSize: '.78rem', fontWeight: 600, cursor: updatingOverdue ? 'not-allowed' : 'pointer', opacity: updatingOverdue ? .7 : 1, fontFamily: "'DM Sans',sans-serif" }}>
-              {updatingOverdue ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <RefreshCw size={14} />}
-              Sync Overdue
-            </button>
-            <button onClick={() => setShowGenerate(true)} style={{ display: 'flex', alignItems: 'center', gap: '.5rem', padding: '.6rem 1.15rem', background: 'linear-gradient(145deg,#22a06b,#1a7d54)', boxShadow: '0 4px 14px rgba(34,160,107,.35)', border: 'none', borderRadius: '.85rem', color: '#fff', fontWeight: 700, fontSize: '.82rem', cursor: 'pointer', fontFamily: "'DM Sans',sans-serif" }}>
-              <Plus size={15} /> Generate Voucher
-            </button>
+          <div style={{ display: 'flex', gap: '.6rem' }}>
+            
+            <AddButton Icon={Loader2} onClick={handleUpdateOverdue} tooltip="Sync Overdue" color="#5b8af0" />
+
+            <AddButton onClick={() => setShowGenerate(true)} tooltip="Generate Voucher" color="#5b8af0" />
+
           </div>
         </div>
 
-        {/* ── KPI tiles ── */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '.75rem', marginBottom: '1.3rem' }}>
+        {/* KPI tiles */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: '.75rem' }}>
           {[
-            { label: 'Paid',      value: counts.paid,              c: '#22a06b', bg: 'rgba(34,160,107,.1)',  Icon: CheckCircle2  },
-            { label: 'Unpaid',    value: counts.unpaid,            c: '#ef4444', bg: 'rgba(239,68,68,.1)',   Icon: Clock         },
-            { label: 'Overdue',   value: counts.overdue,           c: '#f97316', bg: 'rgba(249,115,22,.1)',  Icon: AlertTriangle },
-            { label: 'Collected', value: formatCurrency(totalCollected), c: '#5b8af0', bg: 'rgba(91,138,240,.1)', Icon: DollarSign },
+            { label: 'Paid',      value: counts.paid,                  c: '#22a06b', bg: 'rgba(34,160,107,.1)',  Icon: CheckCircle2  },
+            { label: 'Unpaid',    value: counts.unpaid,                c: '#ef4444', bg: 'rgba(239,68,68,.1)',   Icon: Clock         },
+            { label: 'Overdue',   value: counts.overdue,               c: '#f97316', bg: 'rgba(249,115,22,.1)',  Icon: AlertTriangle },
+            { label: 'Collected', value: formatCurrency(totalCollected), c: '#5b8af0', bg: 'rgba(91,138,240,.1)', Icon: DollarSign    },
           ].map(t => (
             <div key={t.label} style={{ background: 'var(--neu-surface)', border: '1px solid var(--neu-border)', borderRadius: '1rem', padding: '.9rem 1.1rem', boxShadow: '6px 6px 16px var(--neu-shadow-dark), -3px -3px 10px var(--neu-shadow-light)', display: 'flex', alignItems: 'center', gap: '.75rem' }}>
               <div style={{ width: 38, height: 38, borderRadius: '.75rem', background: t.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -685,41 +572,25 @@ export default function FeeVouchersPage() {
           ))}
         </div>
 
-        {/* ── Main content: deck + table ── */}
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start' }}>
+        {/* Filter row + Table */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '.75rem' }}>
 
-          {/* Deck filter rail */}
-          <DeckFilter
-            active={filterStatus}
-            onChange={setFilterStatus}
-            counts={counts}
-            total={pagination.total}
-          />
-
-          {/* Table panel */}
-          <div style={{ flex: 1, background: 'var(--neu-surface)', border: '1px solid var(--neu-border)', borderRadius: '1.25rem', boxShadow: '6px 6px 16px var(--neu-shadow-dark), -3px -3px 10px var(--neu-shadow-light)', overflow: 'hidden' }}>
-
-            {/* Search bar */}
-            <div style={{ padding: '.75rem 1rem', borderBottom: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', gap: '.6rem' }}>
+          {/* Deck + Search on one line */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '.75rem', flexWrap: 'wrap' }}>
+            <DeckFilter active={filterStatus} onChange={setFilterStatus} counts={counts} total={pagination.total} />
+            <div style={{ flex: 1, minWidth: 200, display: 'flex', alignItems: 'center', gap: '.5rem', padding: '.5rem .9rem', background: 'var(--neu-surface)', border: '1px solid var(--neu-border)', borderRadius: '.85rem', boxShadow: '4px 4px 12px var(--neu-shadow-dark), -2px -2px 8px var(--neu-shadow-light)' }}>
               <Search size={14} style={{ color: 'var(--neu-text-ghost)', flexShrink: 0 }} />
-              <input
-                style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontSize: '.85rem', color: 'var(--neu-text-primary)', fontFamily: "'DM Sans',sans-serif" }}
+              <input style={{ flex: 1, background: 'none', border: 'none', outline: 'none', fontSize: '.85rem', color: 'var(--neu-text-primary)', fontFamily: "'DM Sans',sans-serif" }}
                 placeholder="Search by student name or voucher number…"
-                value={search} onChange={e => setSearch(e.target.value)}
-              />
+                value={search} onChange={e => setSearch(e.target.value)} />
             </div>
+          </div>
 
-            {/* Column headers */}
+          {/* Table */}
+          <div style={{ background: 'var(--neu-surface)', border: '1px solid var(--neu-border)', borderRadius: '1.25rem', boxShadow: '6px 6px 16px var(--neu-shadow-dark), -3px -3px 10px var(--neu-shadow-light)', overflow: 'hidden' }}>
             <div className="vchr-header">
-              <span>Voucher #</span>
-              <span>Student</span>
-              <span>Amount</span>
-              <span>Fine</span>
-              <span>Progress</span>
-              <span>Due Date</span>
+              <span>Voucher #</span><span>Student</span><span>Amount</span><span>Fine</span><span>Progress</span><span>Due Date</span>
             </div>
-
-            {/* Rows */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '.3rem', padding: '.4rem .5rem' }}>
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
@@ -731,26 +602,18 @@ export default function FeeVouchersPage() {
                   <p style={{ color: 'var(--neu-text-secondary)', fontWeight: 600 }}>No vouchers found</p>
                 </div>
               ) : filtered.map(v => (
-                <VoucherRow key={v.id} v={v} onRowClick={handleRowClick} />
+                <VoucherRow key={v.id} v={v} onRowClick={(e, row) => openMenu(e, row)} />
               ))}
             </div>
-
-            {/* Pagination */}
             {pagination.total_pages > 1 && (
               <div style={{ padding: '.7rem 1rem', borderTop: '1px solid var(--neu-border)', background: 'var(--neu-surface-deep)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '.72rem', color: 'var(--neu-text-ghost)' }}>
-                  Page {pagination.page} of {pagination.total_pages} ({pagination.total} records)
-                </span>
+                <span style={{ fontSize: '.72rem', color: 'var(--neu-text-ghost)' }}>Page {pagination.page} of {pagination.total_pages} ({pagination.total} records)</span>
                 <div style={{ display: 'flex', gap: '.3rem', alignItems: 'center' }}>
-                  <button className="pg-btn" disabled={pagination.page === 1} onClick={() => fetchVouchers(pagination.page - 1)}>
-                    <ChevronLeft size={13} />
-                  </button>
+                  <button className="pg-btn" disabled={pagination.page === 1} onClick={() => fetchVouchers(pagination.page - 1)}><ChevronLeft size={13} /></button>
                   {Array.from({ length: Math.min(pagination.total_pages, 5) }, (_, i) => i + 1).map(p => (
                     <button key={p} className={`pg-btn${p === pagination.page ? ' active' : ''}`} onClick={() => fetchVouchers(p)}>{p}</button>
                   ))}
-                  <button className="pg-btn" disabled={pagination.page === pagination.total_pages} onClick={() => fetchVouchers(pagination.page + 1)}>
-                    <ChevronRight size={13} />
-                  </button>
+                  <button className="pg-btn" disabled={pagination.page === pagination.total_pages} onClick={() => fetchVouchers(pagination.page + 1)}><ChevronRight size={13} /></button>
                 </div>
               </div>
             )}
@@ -758,10 +621,8 @@ export default function FeeVouchersPage() {
         </div>
       </div>
 
-      {/* Context Menu */}
       <ContextMenu menu={menu} close={closeMenu} items={menu ? ctxItems(menu.row) : []} />
 
-      {/* Modals */}
       {payVoucher   && <PayModal      voucher={payVoucher}  onClose={() => setPayVoucher(null)}  onSuccess={() => fetchVouchers(pagination.page)} />}
       {viewVoucher  && <ViewModal     voucher={viewVoucher} onClose={() => setViewVoucher(null)} onPay={setPayVoucher} />}
       {showGenerate && <GenerateModal onClose={() => setShowGenerate(false)} onSuccess={() => fetchVouchers(1)} />}

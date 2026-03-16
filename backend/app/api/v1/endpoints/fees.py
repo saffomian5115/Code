@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from sqlalchemy import func
+from app.models.fee import FeePayment
 from app.core.dependencies import get_current_user, require_admin
 from app.services.fee_service import (
     FeeStructureService, VoucherService, PaymentService
@@ -180,30 +182,48 @@ def get_all_vouchers(
     vouchers, total = VoucherService.get_all(
         db, status, semester_id, page, per_page
     )
-    data = [{
-        "id": v.id,
-        "voucher_number": v.voucher_number,
-        "student_id": v.student_id,
-        "roll_number": v.student.roll_number if v.student else None,
-        "student_name": v.student.student_profile.full_name
-            if v.student and v.student.student_profile else None,
-        "amount": float(v.amount),
-        "fine_amount": float(v.fine_amount or 0),
-        "total_due": float(v.amount) + float(v.fine_amount or 0),
-        "due_date": str(v.due_date),
-        "status": v.status
-    } for v in vouchers]
+
+    # Single aggregation query — N+1 se bachao
+    voucher_ids = [v.id for v in vouchers]
+    paid_map = {}
+    if voucher_ids:
+        rows = (
+            db.query(FeePayment.voucher_id, func.sum(FeePayment.amount_paid))
+            .filter(FeePayment.voucher_id.in_(voucher_ids))
+            .group_by(FeePayment.voucher_id)
+            .all()
+        )
+        paid_map = {row[0]: float(row[1]) for row in rows}
+
+    data = []
+    for v in vouchers:
+        total_due  = float(v.amount) + float(v.fine_amount or 0)
+        total_paid = paid_map.get(v.id, 0.0)
+        data.append({
+            "id":             v.id,
+            "voucher_number": v.voucher_number,
+            "student_id":     v.student_id,
+            "roll_number":    v.student.roll_number if v.student else None,
+            "student_name":   v.student.student_profile.full_name
+                              if v.student and v.student.student_profile else None,
+            "amount":         float(v.amount),
+            "fine_amount":    float(v.fine_amount or 0),
+            "total_due":      total_due,
+            "total_paid":     total_paid,
+            "remaining":      round(total_due - total_paid, 2),
+            "due_date":       str(v.due_date),
+            "status":         v.status,
+        })
 
     return success_response({
         "vouchers": data,
         "pagination": {
-            "total": total,
-            "page": page,
-            "per_page": per_page,
-            "total_pages": (total + per_page - 1) // per_page
+            "total":       total,
+            "page":        page,
+            "per_page":    per_page,
+            "total_pages": (total + per_page - 1) // per_page,
         }
-    }, "Vouchers retrieved")
-
+    }, "Vouchers retrieved") 
 
 @router.get("/vouchers/{voucher_id}")
 def get_voucher(

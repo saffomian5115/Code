@@ -238,7 +238,16 @@ export default function AdminDashboard() {
           atRisk:    atRisk || [],
           leaderboard: lb || [],
         })
-      } catch (e) { console.error(e) }
+      } catch (e) {
+  console.error(e)
+  setD({
+    students: { students: [], pagination: { total: 0 } },
+    teachers: { teachers: [], pagination: { total: 0 } },
+    depts: [], programs: 0, courses: 0, offerings: 0,
+    semester: null, announcements: [], vouchers: [],
+    gates: [], atRisk: [], leaderboard: [],
+  })
+}
       finally { setLoading(false) }
     })()
   }, [])
