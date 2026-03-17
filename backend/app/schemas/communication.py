@@ -60,20 +60,28 @@ class AnnouncementUpdateRequest(BaseModel):
 
 # ─── NOTICE BOARD SCHEMAS ───────────────────────────────
 
+class TargetAudienceEnum(str, Enum):
+    all      = "all"
+    students = "students"
+    teachers = "teachers"
+    staff    = "staff"
+
 class NoticeCreateRequest(BaseModel):
-    title: str
-    content: str
-    category: Optional[str] = None
-    expiry_date: Optional[date] = None
-    file_attachments: Optional[List[str]] = None
-    is_public: Optional[bool] = True
+    title:            str
+    content:          str
+    category:         Optional[str]                  = None
+    target_audience:  Optional[TargetAudienceEnum]   = TargetAudienceEnum.all  # ✅ NEW
+    expiry_date:      Optional[date]                 = None
+    file_attachments: Optional[List[str]]            = None
+    is_public:        Optional[bool]                 = True
 
 class NoticeUpdateRequest(BaseModel):
-    title: Optional[str] = None
-    content: Optional[str] = None
-    category: Optional[str] = None
-    expiry_date: Optional[date] = None
-    is_public: Optional[bool] = None
+    title:            Optional[str]                  = None
+    content:          Optional[str]                  = None
+    category:         Optional[str]                  = None
+    target_audience:  Optional[TargetAudienceEnum]   = None                   # ✅ NEW
+    expiry_date:      Optional[date]                 = None
+    is_public:        Optional[bool]                 = None
 
 
 # ─── CHAT GROUP SCHEMAS ─────────────────────────────────

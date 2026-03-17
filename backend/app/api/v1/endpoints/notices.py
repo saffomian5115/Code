@@ -9,11 +9,12 @@ from app.utils.response import success_response, error_response
 router = APIRouter(prefix="/notices", tags=["Notice Board"])
 
 
+# ✅ FIX: require_teacher → require_admin (admin page se create hota hai)
 @router.post("")
 def create_notice(
     request: NoticeCreateRequest,
     db: Session = Depends(get_db),
-    current_user = Depends(require_teacher)
+    current_user = Depends(require_admin)
 ):
     notice, error = NoticeBoardService.create(
         db, request.model_dump(), posted_by=current_user.id
@@ -22,11 +23,12 @@ def create_notice(
         return error_response(error, "CREATE_FAILED")
 
     return success_response({
-        "id": notice.id,
-        "title": notice.title,
-        "category": notice.category,
-        "expiry_date": str(notice.expiry_date) if notice.expiry_date else None,
-        "posted_at": str(notice.posted_at)
+        "id":               notice.id,
+        "title":            notice.title,
+        "category":         notice.category,
+        "target_audience":  notice.target_audience,   # ✅ NEW
+        "expiry_date":      str(notice.expiry_date) if notice.expiry_date else None,
+        "posted_at":        str(notice.posted_at)
     }, "Notice posted successfully", status_code=201)
 
 
@@ -42,22 +44,23 @@ def get_notices(
         db, category, is_public=True, page=page, per_page=per_page
     )
     data = [{
-        "id": n.id,
-        "title": n.title,
-        "content": n.content,
-        "category": n.category,
-        "expiry_date": str(n.expiry_date) if n.expiry_date else None,
+        "id":               n.id,
+        "title":            n.title,
+        "content":          n.content,
+        "category":         n.category,
+        "target_audience":  n.target_audience,        # ✅ NEW
+        "expiry_date":      str(n.expiry_date) if n.expiry_date else None,
         "file_attachments": n.file_attachments,
-        "views": n.views,
-        "posted_at": str(n.posted_at)
+        "views":            n.views,
+        "posted_at":        str(n.posted_at)
     } for n in notices]
 
     return success_response({
         "notices": data,
         "pagination": {
-            "total": total,
-            "page": page,
-            "per_page": per_page,
+            "total":       total,
+            "page":        page,
+            "per_page":    per_page,
             "total_pages": (total + per_page - 1) // per_page
         }
     }, "Notices retrieved")
@@ -73,29 +76,29 @@ def get_notice(
     if not notice:
         return error_response("Notice not found", "NOT_FOUND", status_code=404)
 
-    # View count increment
     NoticeBoardService.increment_view(db, notice_id)
 
     return success_response({
-        "id": notice.id,
-        "title": notice.title,
-        "content": notice.content,
-        "category": notice.category,
+        "id":               notice.id,
+        "title":            notice.title,
+        "content":          notice.content,
+        "category":         notice.category,
+        "target_audience":  notice.target_audience,   # ✅ NEW
+        "expiry_date":      str(notice.expiry_date) if notice.expiry_date else None,
         "file_attachments": notice.file_attachments,
-        "expiry_date": str(notice.expiry_date) if notice.expiry_date else None,
-        "views": notice.views + 1,
-        "posted_by": notice.poster.teacher_profile.full_name
-            if notice.poster and notice.poster.teacher_profile else None,
-        "posted_at": str(notice.posted_at)
-    })
+        "is_public":        notice.is_public,
+        "views":            notice.views,
+        "posted_at":        str(notice.posted_at)
+    }, "Notice retrieved")
 
 
+# ✅ FIX: require_admin for updates too
 @router.put("/{notice_id}")
 def update_notice(
     notice_id: int,
     request: NoticeUpdateRequest,
     db: Session = Depends(get_db),
-    current_user = Depends(require_teacher)
+    current_user = Depends(require_admin)
 ):
     notice, error = NoticeBoardService.update(
         db, notice_id, request.model_dump(exclude_none=True)
@@ -110,7 +113,7 @@ def update_notice(
 def delete_notice(
     notice_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(require_teacher)
+    current_user = Depends(require_admin)
 ):
     success, error = NoticeBoardService.delete(db, notice_id)
     if not success:

@@ -696,6 +696,7 @@ CREATE TABLE notice_board (
     title VARCHAR(200) NOT NULL,
     content TEXT NOT NULL,
     category VARCHAR(50),
+    target_audience ENUM('all', 'students', 'teachers', 'staff') NOT NULL DEFAULT 'all',
     posted_by INT NOT NULL,
     posted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     expiry_date DATE,
