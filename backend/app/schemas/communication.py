@@ -47,9 +47,12 @@ class AnnouncementCreateRequest(BaseModel):
     attachment_url: Optional[str] = None
     pinned_until: Optional[date] = None
 
+# ✅ FIX #2: target_type aur target_id add kiye update schema mein
 class AnnouncementUpdateRequest(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
+    target_type: Optional[TargetTypeEnum] = None   # ← ADDED
+    target_id: Optional[int] = None                # ← ADDED
     priority: Optional[PriorityEnum] = None
     attachment_url: Optional[str] = None
     pinned_until: Optional[date] = None

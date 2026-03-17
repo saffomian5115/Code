@@ -11,11 +11,12 @@ from app.utils.response import success_response, error_response
 router = APIRouter(prefix="/announcements", tags=["Announcements"])
 
 
+# ✅ FIX #3: require_teacher → require_admin (admin page se create hota hai)
 @router.post("")
 def create_announcement(
     request: AnnouncementCreateRequest,
     db: Session = Depends(get_db),
-    current_user = Depends(require_teacher)
+    current_user = Depends(require_admin)
 ):
     announcement, error = AnnouncementService.create(
         db, request.model_dump(), created_by=current_user.id
@@ -57,7 +58,9 @@ def get_announcements(
         "created_by_name": a.creator.student_profile.full_name
             if a.creator and a.creator.student_profile
             else (a.creator.teacher_profile.full_name
-            if a.creator and a.creator.teacher_profile else None),
+            if a.creator and a.creator.teacher_profile
+            else (a.creator.admin_profile.full_name
+            if a.creator and a.creator.admin_profile else None)),
         "created_at": str(a.created_at)
     } for a in announcements]
 
@@ -143,12 +146,13 @@ def get_announcement(
     })
 
 
+# ✅ FIX #3: require_teacher → require_admin
 @router.put("/{announcement_id}")
 def update_announcement(
     announcement_id: int,
     request: AnnouncementUpdateRequest,
     db: Session = Depends(get_db),
-    current_user = Depends(require_teacher)
+    current_user = Depends(require_admin)
 ):
     announcement, error = AnnouncementService.update(
         db, announcement_id, request.model_dump(exclude_none=True)
@@ -159,11 +163,12 @@ def update_announcement(
     return success_response(message="Announcement updated successfully")
 
 
+# ✅ FIX #3: require_teacher → require_admin
 @router.delete("/{announcement_id}")
 def delete_announcement(
     announcement_id: int,
     db: Session = Depends(get_db),
-    current_user = Depends(require_teacher)
+    current_user = Depends(require_admin)
 ):
     success, error = AnnouncementService.delete(db, announcement_id)
     if not success:
