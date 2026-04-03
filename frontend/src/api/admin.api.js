@@ -11,6 +11,7 @@ export const adminAPI = {
   updateStudent: (id, data) => api.put(`/students/${id}`, data),
   toggleStudentStatus: (id) => api.patch(`/students/${id}/status`),
   deleteStudent: (id) => api.delete(`/students/${id}`),
+
   // ─── TEACHERS ──────────────────────────────────────────
   getTeachers: (page = 1, per_page = 20, search = "") =>
     api.get(
@@ -35,7 +36,6 @@ export const adminAPI = {
   createProgram: (data) => api.post("/programs", data),
   updateProgram: (id, data) => api.put(`/programs/${id}`, data),
   deleteProgram: (id) => api.delete(`/programs/${id}`),
-  activateSemester: (id) => api.patch(`/semesters/${id}/activate`),
 
   // ─── SEMESTERS ─────────────────────────────────────────
   getSemesters: () => api.get("/semesters"),
@@ -44,6 +44,7 @@ export const adminAPI = {
   createSemester: (data) => api.post("/semesters", data),
   updateSemester: (id, data) => api.put(`/semesters/${id}`, data),
   deleteSemester: (id) => api.delete(`/semesters/${id}`),
+  activateSemester: (id) => api.patch(`/semesters/${id}/activate`),
 
   // ─── COURSES ───────────────────────────────────────────
   getCourses: (params = {}) => {
@@ -109,10 +110,18 @@ export const adminAPI = {
   getGate: (id) => api.get(`/gates/${id}`),
   createGate: (data) => api.post("/gates", data),
   updateGate: (id, data) => api.put(`/gates/${id}`, data),
+
+  // ✅ DELETE GATE — permanently delete gate + all cameras/schedules/attendance
+  deleteGate: (id) => api.delete(`/gates/${id}`),
+
   addCamera: (gateId, data) => api.post(`/gates/${gateId}/cameras`, data),
+
+  // ✅ ADD SCHEDULE — POST /gates/{gateId}/schedules  (one day at a time, upserts)
+  addSchedule: (gateId, data) => api.post(`/gates/${gateId}/schedules`, data),
+
   gateAttendance: (data) => api.post("/face/gate-attendance", data),
   setGateSchedule: (gateId, data) =>
-    api.post(`/gates/${gateId}/schedule`, data),
+    api.post(`/gates/${gateId}/schedules`, data),
   getStudentCampusAttendance: (studentId, params = {}) => {
     const q = new URLSearchParams(params).toString();
     return api.get(

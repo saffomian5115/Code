@@ -242,6 +242,7 @@ def get_gates(
         "gate_name": g.gate_name,
         "gate_code": g.gate_code,
         "gate_type": g.gate_type,
+        "location_description": g.location_description,
         "is_active": g.is_active,
         "last_ping": str(g.last_ping) if g.last_ping else None,
         "total_cameras": len(g.cameras)
@@ -278,9 +279,9 @@ def get_gate(
             "status": c.status
         } for c in gate.cameras],
         "schedules": [{
-            "day": s.day_of_week,
-            "open_time": s.open_time,
-            "close_time": s.close_time,
+            "day_of_week": s.day_of_week,
+            "open_time": str(s.open_time),
+            "close_time": str(s.close_time),
             "is_holiday": s.is_holiday
         } for s in gate.schedules]
     })
@@ -300,6 +301,43 @@ def update_gate(
         return error_response(error, "UPDATE_FAILED", status_code=404)
 
     return success_response(message="Gate updated successfully")
+
+
+@router.delete("/gates/{gate_id}")
+def delete_gate(
+    gate_id: int,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin)
+):
+    """
+    Gate permanently delete karo.
+    DB schema mein gate_cameras aur gate_schedules pe ON DELETE CASCADE hai,
+    is liye linked cameras/schedules automatically delete ho jati hain.
+    campus_attendance mein gate_id FK hai — pehle wo delete karo.
+    """
+    gate = GateService.get_gate_by_id(db, gate_id)
+    if not gate:
+        return error_response("Gate not found", "NOT_FOUND", status_code=404)
+
+    gate_name = gate.gate_name
+    try:
+        from sqlalchemy import text
+        # campus_attendance aur face_recognition_logs mein FK hai — pehle delete karo
+        db.execute(text("DELETE FROM face_recognition_logs WHERE gate_id = :id"), {"id": gate_id})
+        db.execute(text("DELETE FROM gate_access_logs WHERE gate_id = :id"), {"id": gate_id})
+        # camera_health_logs cascade se handle honge (ON DELETE CASCADE via gate_cameras)
+        # campus_attendance delete
+        db.execute(text("DELETE FROM campus_attendance WHERE gate_id = :id"), {"id": gate_id})
+        # Ab gate delete karo (gate_cameras + gate_schedules CASCADE se delete honge)
+        db.execute(text("DELETE FROM campus_gates WHERE id = :id"), {"id": gate_id})
+        db.commit()
+        return success_response(
+            {"gate_id": gate_id, "gate_name": gate_name},
+            f"Gate '{gate_name}' deleted successfully"
+        )
+    except Exception as e:
+        db.rollback()
+        return error_response(str(e), "DELETE_FAILED", status_code=400)
 
 
 @router.patch("/gates/{gate_id}/ping")
@@ -345,6 +383,11 @@ def add_schedule(
     db: Session = Depends(get_db),
     admin = Depends(require_admin)
 ):
+    """
+    Ek din ka schedule set/update karo.
+    Existing schedule for same day_of_week update ho jata hai (upsert).
+    Frontend se 7 baar call hota hai (ek per day).
+    """
     schedule, error = GateService.add_schedule(db, gate_id, request.model_dump())
     if error:
         return error_response(error, "CREATE_FAILED")
@@ -353,9 +396,10 @@ def add_schedule(
         "id": schedule.id,
         "gate_id": gate_id,
         "day_of_week": schedule.day_of_week,
-        "open_time": schedule.open_time,
-        "close_time": schedule.close_time
-    }, "Schedule added successfully", status_code=201)
+        "open_time": str(schedule.open_time),
+        "close_time": str(schedule.close_time),
+        "is_holiday": schedule.is_holiday
+    }, "Schedule saved successfully", status_code=201)
 
 
 # ════════════════════════════════════════════════════════
@@ -440,6 +484,7 @@ def get_student_campus_attendance(
         "total_records": len(data),
         "records": data
     }, "Campus attendance retrieved")
+
 
 @router.get("/offerings/{offering_id}/attendance-report")
 def get_attendance_report(
