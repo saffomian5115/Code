@@ -238,6 +238,30 @@ def get_quiz_result(
         "answers": attempt.answers
     }, "Quiz result retrieved")
 
+@router.delete("/quizzes/{quiz_id}")
+def delete_quiz(
+    quiz_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_teacher)
+):
+    quiz = QuizService.get_by_id(db, quiz_id)
+    if not quiz:
+        return error_response("Quiz not found", "NOT_FOUND", status_code=404)
+
+    if current_user.role != "admin" and quiz.created_by != current_user.id:
+        return error_response("Not authorized to delete this quiz", "FORBIDDEN", status_code=403)
+
+    try:
+        from app.models.assessment import QuizAttempt, QuizQuestion
+        db.query(QuizAttempt).filter(QuizAttempt.quiz_id == quiz_id).delete(synchronize_session=False)
+        db.query(QuizQuestion).filter(QuizQuestion.quiz_id == quiz_id).delete(synchronize_session=False)
+        db.delete(quiz)
+        db.commit()
+        return success_response(message="Quiz deleted successfully")
+    except Exception as e:
+        db.rollback()
+        return error_response(str(e), "DELETE_FAILED", status_code=400)
+
 
 # ─── AI QUIZZES ─────────────────────────────────────────
 
