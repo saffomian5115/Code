@@ -1,9 +1,10 @@
 // ═══════════════════════════════════════════════════════════════
-//  AttendancePage.jsx  —  Neumorphic Theme
+//  AttendancePage.jsx  —  Neumorphic + Dock Tab Navigation
 //  Replace: frontend/src/pages/teacher/AttendancePage.jsx
 // ═══════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import {
   ClipboardCheck, BookOpen, BarChart2, AlertTriangle,
   Plus, Loader2, CheckCircle2, Clock, X,
@@ -11,6 +12,8 @@ import {
 import toast from 'react-hot-toast'
 import { useSearchParams } from 'react-router-dom'
 import { teacherAPI } from '../../api/teacher.api'
+import AddButton from '../../components/ui/AddButton'
+
 
 // ── Shared styles ─────────────────────────────────────────────
 const neu = (extra = {}) => ({
@@ -34,10 +37,7 @@ const inputStyle = {
   fontFamily: "'DM Sans', sans-serif",
 }
 
-const selectStyle = {
-  ...inputStyle,
-  cursor: 'pointer',
-}
+const selectStyle = { ...inputStyle, cursor: 'pointer' }
 
 const STATUS_CFG = {
   present: { label: 'Present', abbr: 'P', color: '#3ecf8e', bg: 'rgba(62,207,142,0.15)' },
@@ -236,7 +236,6 @@ function MarkAttendanceTab({ offeringId }) {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      {/* Session selector + new session */}
       <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <div style={{ flex: 1, minWidth: 200 }}>
           <label style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: '0.35rem' }}>Session</label>
@@ -245,17 +244,12 @@ function MarkAttendanceTab({ offeringId }) {
             {sessions.map(s => <option key={s.id} value={s.id}>{formatDate(s.session_date)} — {s.topic} {s.attendance_marked ? '✓' : ''}</option>)}
           </select>
         </div>
-        <NeuBtn onClick={() => setShowCreate(true)}><Plus size={14} /> New Session</NeuBtn>
+        <AddButton onClick={() => setShowCreate(true)} tooltip="New Session" color="#5b8af0" />
       </div>
 
       {selectedSession && (
         <>
-          {/* Session info bar */}
-          <div style={{
-            ...neu({ borderRadius: '0.875rem', padding: '0.85rem 1rem' }),
-            background: 'rgba(91,138,240,0.06)',
-            display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
-          }}>
+          <div style={{ ...neu({ borderRadius: '0.875rem', padding: '0.85rem 1rem' }), background: 'rgba(91,138,240,0.06)', display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <div style={{ flex: 1 }}>
               <p style={{ fontWeight: 700, fontSize: '0.87rem', color: 'var(--neu-text-primary)' }}>{selectedSession.topic}</p>
               <p style={{ fontSize: '0.72rem', color: 'var(--neu-text-ghost)' }}>{formatDate(selectedSession.session_date)} · {selectedSession.session_type}</p>
@@ -267,38 +261,88 @@ function MarkAttendanceTab({ offeringId }) {
             )}
           </div>
 
-          {/* Bulk actions + stats */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.75rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--neu-text-ghost)', fontWeight: 600 }}>Mark all:</span>
-              {Object.entries(STATUS_CFG).map(([st, cfg]) => (
-                <button key={st} onClick={() => setAll(st)}
-                  style={{
-                    padding: '0.3rem 0.8rem', borderRadius: '0.5rem',
-                    border: `1px solid ${cfg.color}40`,
-                    background: cfg.bg, color: cfg.color,
-                    fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer',
-                    fontFamily: "'DM Sans', sans-serif",
-                    transition: 'transform 0.12s',
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
-                  onMouseLeave={e => e.currentTarget.style.transform = ''}
-                >
-                  {cfg.label}
-                </button>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
-              {Object.entries(counts).map(([st, c]) => (
-                <span key={st} style={{ fontSize: '0.72rem', fontWeight: 600, color: STATUS_CFG[st]?.color || 'var(--neu-text-ghost)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
-                  <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_CFG[st]?.color }} />
-                  {c} {st}
-                </span>
-              ))}
-            </div>
-          </div>
+  {/* PILL STYLED STATUS BUTTONS - Matching Login Page Design */}
+  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+    <span style={{ fontSize: '0.7rem', color: 'var(--neu-text-ghost)', fontWeight: 600, letterSpacing: '0.04em' }}>MARK ALL:</span>
+    {Object.entries(STATUS_CFG).map(([st, cfg]) => {
+      // Tooltip style (like login page)
+      const tooltipStyle = {
+        position: 'absolute',
+        bottom: 'calc(100% + 8px)',
+        left: '50%',
+        transform: 'translateX(-50%)',
+        background: 'var(--neu-surface)',
+        boxShadow: '0 5px 0 #b0bed2, 0 8px 12px -6px rgba(0,0,0,0.18), inset 0 1px 2px white',
+        border: '1px solid rgba(255,255,255,0.7)',
+        fontSize: '0.65rem',
+        fontWeight: 700,
+        padding: '0.25rem 0.6rem',
+        borderRadius: '0.5rem',
+        whiteSpace: 'nowrap',
+        pointerEvents: 'none',
+        opacity: 0,
+        transition: 'opacity 0.15s ease, transform 0.15s ease',
+        letterSpacing: '0.04em',
+        zIndex: 10,
+        color: cfg.color,
+      }
+      return (
+        <div key={st} className="status-pill-wrap" style={{ position: 'relative' }}>
+          <button
+            onClick={() => setAll(st)}
+            className="neu-press-btn-status"
+            style={{
+              width: '40px',
+              height: '40px',
+              borderRadius: '1rem',
+              background: cfg.bg,
+              border: `1.5px solid ${cfg.color}40`,
+              color: cfg.color,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'column',
+              gap: '2px',
+              transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)',
+              boxShadow: '4px 4px 8px var(--neu-shadow-dark), -2px -2px 6px var(--neu-shadow-light), inset 0 1px 0 rgba(255,255,255,0.5)',
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-3px)'
+              e.currentTarget.style.boxShadow = '6px 6px 12px var(--neu-shadow-dark), -3px -3px 8px var(--neu-shadow-light)'
+              const tooltip = e.currentTarget.parentElement.querySelector('.status-tooltip')
+              if (tooltip) tooltip.style.opacity = '1'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = '4px 4px 8px var(--neu-shadow-dark), -2px -2px 6px var(--neu-shadow-light)'
+              const tooltip = e.currentTarget.parentElement.querySelector('.status-tooltip')
+              if (tooltip) tooltip.style.opacity = '0'
+            }}
+          >
+            <span style={{ fontSize: '1rem', fontWeight: 800, lineHeight: 1 }}>{cfg.abbr}</span>
+          </button>
+          <span className="status-tooltip" style={tooltipStyle}>
+            Mark all as {cfg.label}
+          </span>
+        </div>
+      )
+    })}
+  </div>
 
-          {/* Student List */}
+  {/* Summary Counts (unchanged) */}
+  <div style={{ display: 'flex', gap: '0.75rem' }}>
+    {Object.entries(counts).map(([st, c]) => (
+      <span key={st} style={{ fontSize: '0.72rem', fontWeight: 600, color: STATUS_CFG[st]?.color || 'var(--neu-text-ghost)', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
+        <span style={{ width: 8, height: 8, borderRadius: '50%', background: STATUS_CFG[st]?.color }} />
+        {c} {st}
+      </span>
+    ))}
+  </div>
+</div>
+
           {loading ? (
             <div style={{ display: 'flex', justifyContent: 'center', padding: '2rem' }}><Loader2 size={24} style={{ color: '#5b8af0', animation: 'spin 0.8s linear infinite' }} /></div>
           ) : (
@@ -306,11 +350,7 @@ function MarkAttendanceTab({ offeringId }) {
               <div style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr>
-                      {['#', 'Student', 'Roll No', 'Status'].map(h => (
-                        <th key={h} style={thStyle}>{h}</th>
-                      ))}
-                    </tr>
+                    <tr>{['#', 'Student', 'Roll No', 'Status'].map(h => <th key={h} style={thStyle}>{h}</th>)}</tr>
                   </thead>
                   <tbody>
                     {students.map((student, idx) => {
@@ -329,16 +369,7 @@ function MarkAttendanceTab({ offeringId }) {
                               {Object.entries(STATUS_CFG).map(([s, cfg]) => (
                                 <button key={s} onClick={() => setAttendance(p => ({ ...p, [student.student_id]: s }))}
                                   title={cfg.label}
-                                  style={{
-                                    width: 30, height: 30, borderRadius: '0.5rem', border: 'none', cursor: 'pointer',
-                                    background: st === s ? cfg.color : 'var(--neu-surface-deep)',
-                                    color: st === s ? '#fff' : 'var(--neu-text-ghost)',
-                                    fontSize: '0.68rem', fontWeight: 800,
-                                    boxShadow: st === s
-                                      ? `3px 3px 8px var(--neu-shadow-dark), -1px -1px 4px ${cfg.color}60`
-                                      : 'inset 2px 2px 4px var(--neu-shadow-dark), inset -1px -1px 3px var(--neu-shadow-light)',
-                                    transition: 'all 0.14s',
-                                  }}>
+                                  style={{ width: 30, height: 30, borderRadius: '0.5rem', border: 'none', cursor: 'pointer', background: st === s ? cfg.color : 'var(--neu-surface-deep)', color: st === s ? '#fff' : 'var(--neu-text-ghost)', fontSize: '0.68rem', fontWeight: 800, boxShadow: st === s ? `3px 3px 8px var(--neu-shadow-dark), -1px -1px 4px ${cfg.color}60` : 'inset 2px 2px 4px var(--neu-shadow-dark), inset -1px -1px 3px var(--neu-shadow-light)', transition: 'all 0.14s' }}>
                                   {cfg.abbr}
                                 </button>
                               ))}
@@ -376,55 +407,43 @@ function SessionsTab({ offeringId }) {
       .then(r => setSessions(r.data.data?.sessions || []))
       .catch(() => toast.error('Failed to load sessions'))
       .finally(() => setLoading(false))
-  }, [offeringId])
+  }, [])
 
   return (
     <div style={{ ...neu(), overflow: 'hidden' }}>
       <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
-            <tr>
-              {['Date', 'Topic', 'Type', 'Time', 'Attendance', 'Marked At'].map(h => (
-                <th key={h} style={thStyle}>{h}</th>
-              ))}
-            </tr>
+            <tr>{['Date', 'Topic', 'Type', 'Time', 'Attendance', 'Marked At'].map(h => <th key={h} style={thStyle}>{h}</th>)}</tr>
           </thead>
           <tbody>
             {loading ? (
               Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i}>
-                  {Array.from({ length: 6 }).map((_, j) => (
-                    <td key={j} style={tdStyle}><div style={{ height: 16, borderRadius: '0.5rem', background: 'var(--neu-surface-deep)', animation: 'pulse 1.4s ease-in-out infinite' }} /></td>
-                  ))}
-                </tr>
+                <tr key={i}>{Array.from({ length: 6 }).map((_, j) => <td key={j} style={tdStyle}><div style={{ height: 16, borderRadius: '0.5rem', background: 'var(--neu-surface-deep)', animation: 'pulse 1.4s ease-in-out infinite' }} /></td>)}</tr>
               ))
             ) : sessions.length === 0 ? (
-              <tr><td colSpan={6} style={{ ...tdStyle, textAlign: 'center', padding: '3rem', color: 'var(--neu-text-ghost)' }}>No sessions yet — create your first session</td></tr>
-            ) : (
-              sessions.map(s => (
-                <tr key={s.id}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--neu-surface-deep)'}
-                  onMouseLeave={e => e.currentTarget.style.background = ''}
-                  style={{ transition: 'background 0.12s' }}
-                >
-                  <td style={{ ...tdStyle, fontWeight: 600 }}>{formatDate(s.session_date)}</td>
-                  <td style={tdStyle}>{s.topic}</td>
-                  <td style={tdStyle}>
-                    <span style={{ background: 'var(--neu-surface-deep)', color: 'var(--neu-text-muted)', fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.55rem', borderRadius: '0.4rem', textTransform: 'capitalize' }}>
-                      {s.session_type}
-                    </span>
-                    {s.is_makeup && <span style={{ marginLeft: '0.35rem', background: 'rgba(245,166,35,0.12)', color: '#f5a623', fontSize: '0.68rem', fontWeight: 700, padding: '0.15rem 0.45rem', borderRadius: '0.35rem' }}>Makeup</span>}
-                  </td>
-                  <td style={{ ...tdStyle, fontSize: '0.75rem', color: 'var(--neu-text-ghost)' }}>{s.start_time} – {s.end_time}</td>
-                  <td style={tdStyle}>
-                    {s.attendance_marked
-                      ? <span style={{ color: '#3ecf8e', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.3rem' }}><CheckCircle2 size={13} /> Marked</span>
-                      : <span style={{ color: 'var(--neu-text-ghost)', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Clock size={13} /> Pending</span>}
-                  </td>
-                  <td style={{ ...tdStyle, fontSize: '0.72rem', color: 'var(--neu-text-ghost)' }}>{formatDateTime(s.marked_at)}</td>
-                </tr>
-              ))
-            )}
+              <tr><td colSpan={6} style={{ ...tdStyle, textAlign: 'center', padding: '3rem', color: 'var(--neu-text-ghost)' }}>No sessions yet</td></tr>
+            ) : sessions.map(s => (
+              <tr key={s.id}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--neu-surface-deep)'}
+                onMouseLeave={e => e.currentTarget.style.background = ''}
+                style={{ transition: 'background 0.12s' }}
+              >
+                <td style={{ ...tdStyle, fontWeight: 600 }}>{formatDate(s.session_date)}</td>
+                <td style={tdStyle}>{s.topic}</td>
+                <td style={tdStyle}>
+                  <span style={{ background: 'var(--neu-surface-deep)', color: 'var(--neu-text-muted)', fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.55rem', borderRadius: '0.4rem', textTransform: 'capitalize' }}>{s.session_type}</span>
+                  {s.is_makeup && <span style={{ marginLeft: '0.35rem', background: 'rgba(245,166,35,0.12)', color: '#f5a623', fontSize: '0.68rem', fontWeight: 700, padding: '0.15rem 0.45rem', borderRadius: '0.35rem' }}>Makeup</span>}
+                </td>
+                <td style={{ ...tdStyle, fontSize: '0.75rem', color: 'var(--neu-text-ghost)' }}>{s.start_time} – {s.end_time}</td>
+                <td style={tdStyle}>
+                  {s.attendance_marked
+                    ? <span style={{ color: '#3ecf8e', fontSize: '0.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '0.3rem' }}><CheckCircle2 size={13} /> Marked</span>
+                    : <span style={{ color: 'var(--neu-text-ghost)', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}><Clock size={13} /> Pending</span>}
+                </td>
+                <td style={{ ...tdStyle, fontSize: '0.72rem', color: 'var(--neu-text-ghost)' }}>{formatDateTime(s.marked_at)}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -442,7 +461,7 @@ function ReportTab({ offeringId }) {
       .then(r => setReport(r.data.data))
       .catch(() => toast.error('Failed to load report'))
       .finally(() => setLoading(false))
-  }, [offeringId])
+  }, [])
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '2.5rem' }}><Loader2 size={26} style={{ color: '#5b8af0', animation: 'spin 0.8s linear infinite' }} /></div>
   if (!report) return null
@@ -463,11 +482,7 @@ function ReportTab({ offeringId }) {
       <div style={{ ...neu(), overflow: 'hidden' }}>
         <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                {['Student', 'Roll No', 'Attended', 'Absent', 'Percentage', 'Status'].map(h => <th key={h} style={thStyle}>{h}</th>)}
-              </tr>
-            </thead>
+            <thead><tr>{['Student', 'Roll No', 'Attended', 'Absent', 'Percentage', 'Status'].map(h => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
             <tbody>
               {report.report?.map(r => {
                 const pct = r.percentage || 0
@@ -516,17 +531,13 @@ function ShortAttendanceTab({ offeringId }) {
       .then(r => setStudents(r.data.data?.students || []))
       .catch(() => toast.error('Failed to load short attendance'))
       .finally(() => setLoading(false))
-  }, [offeringId])
+  }, [])
 
   if (loading) return <div style={{ display: 'flex', justifyContent: 'center', padding: '2.5rem' }}><Loader2 size={26} style={{ color: '#5b8af0', animation: 'spin 0.8s linear infinite' }} /></div>
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-      <div style={{
-        ...neu({ borderRadius: '0.875rem', padding: '0.85rem 1.1rem' }),
-        background: students.length > 0 ? 'rgba(242,107,107,0.06)' : 'rgba(62,207,142,0.06)',
-        display: 'flex', alignItems: 'center', gap: '0.75rem',
-      }}>
+      <div style={{ ...neu({ borderRadius: '0.875rem', padding: '0.85rem 1.1rem' }), background: students.length > 0 ? 'rgba(242,107,107,0.06)' : 'rgba(62,207,142,0.06)', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
         {students.length > 0
           ? <AlertTriangle size={18} style={{ color: '#f26b6b', flexShrink: 0 }} />
           : <CheckCircle2 size={18} style={{ color: '#3ecf8e', flexShrink: 0 }} />}
@@ -538,11 +549,7 @@ function ShortAttendanceTab({ offeringId }) {
         <div style={{ ...neu(), overflow: 'hidden' }}>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr>
-                  {['Student', 'Roll No', 'Attended', 'Total', 'Percentage', 'Shortage'].map(h => <th key={h} style={thStyle}>{h}</th>)}
-                </tr>
-              </thead>
+              <thead><tr>{['Student', 'Roll No', 'Attended', 'Total', 'Percentage', 'Shortage'].map(h => <th key={h} style={thStyle}>{h}</th>)}</tr></thead>
               <tbody>
                 {students.map(s => (
                   <tr key={s.student_id}
@@ -571,14 +578,165 @@ function ShortAttendanceTab({ offeringId }) {
   )
 }
 
-// ── Main Page ─────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════
+// DOCK TAB — with magnify effect + tooltip
+// ════════════════════════════════════════════════════════
 const TAB_CFG = [
-  { key: 'mark',     label: 'Mark Attendance', icon: ClipboardCheck },
-  { key: 'sessions', label: 'Session History',  icon: BookOpen },
-  { key: 'report',   label: 'Full Report',      icon: BarChart2 },
-  { key: 'short',    label: 'Short Attendance', icon: AlertTriangle },
+  { key: 'mark',     label: 'Mark Attendance', icon: ClipboardCheck, color: '#5b8af0' },
+  { key: 'sessions', label: 'Session History',  icon: BookOpen,        color: '#22a06b' },
+  { key: 'report',   label: 'Full Report',      icon: BarChart2,       color: '#a78bfa' },
+  { key: 'short',    label: 'Short Attendance', icon: AlertTriangle,   color: '#f26b6b' },
 ]
 
+const BASE_SIZE = 40
+const MAX_SIZE  = 55
+const DISTANCE  = 120
+const BTN_RADIUS = 13
+
+function DockTabItem({ cfg, activeTab, setTab, mouseX }) {
+  const wrapRef = useRef(null)
+  const [size, setSize] = useState(BASE_SIZE)
+  const [showTip, setShowTip] = useState(false)
+  const [tipPos, setTipPos] = useState(null)
+  const isActive = activeTab === cfg.key
+
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el) return
+    const rect   = el.getBoundingClientRect()
+    const center = rect.left + rect.width / 2
+    const dist   = Math.abs(mouseX - center)
+    if (dist >= DISTANCE) { setSize(BASE_SIZE); return }
+    const t     = 1 - dist / DISTANCE
+    const eased = t * t * (3 - 2 * t)
+    setSize(BASE_SIZE + (MAX_SIZE - BASE_SIZE) * eased)
+  }, [mouseX])
+
+  const radius = BTN_RADIUS + (size - BASE_SIZE) * 0.25
+  const Icon = cfg.icon
+
+  const handleMouseEnter = () => {
+    setShowTip(true)
+    if (wrapRef.current) {
+      const r = wrapRef.current.getBoundingClientRect()
+      setTipPos({ top: r.bottom + 10, left: r.left + r.width / 2 })
+    }
+  }
+
+  return (
+    <div
+      ref={wrapRef}
+      style={{ position: 'relative', display: 'flex', justifyContent: 'center', flexShrink: 0 }}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={() => setShowTip(false)}
+    >
+      <button
+        onClick={() => setTab(cfg.key)}
+        style={{
+          width:  `${size}px`,
+          height: `${size}px`,
+          borderRadius: `${radius}px`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0, cursor: 'pointer', border: 'none',
+          background: isActive
+            ? `linear-gradient(145deg, ${cfg.color}28, ${cfg.color}10)`
+            : 'linear-gradient(145deg, var(--neu-surface), var(--neu-surface-deep))',
+          boxShadow: isActive
+            ? `5px 5px 12px var(--neu-shadow-dark), -3px -3px 8px var(--neu-shadow-light), inset 0 1px 0 rgba(255,255,255,0.5), 0 0 0 2px ${cfg.color}40`
+            : `5px 5px 12px var(--neu-shadow-dark), -3px -3px 8px var(--neu-shadow-light), inset 0 1px 0 rgba(255,255,255,0.6)`,
+          borderColor: isActive ? `${cfg.color}35` : 'var(--neu-border)',
+          outline: `1px solid ${isActive ? cfg.color + '35' : 'var(--neu-border)'}`,
+          color: isActive ? cfg.color : 'var(--neu-text-muted)',
+          transition: [
+            'width 0.14s cubic-bezier(0.34,1.56,0.64,1)',
+            'height 0.14s cubic-bezier(0.34,1.56,0.64,1)',
+            'border-radius 0.14s ease',
+            'box-shadow 0.2s ease',
+            'background 0.2s ease',
+            'color 0.2s ease',
+          ].join(', '),
+        }}
+      >
+        <Icon
+          size={Math.round(size * 0.42)}
+          style={{ color: isActive ? cfg.color : 'var(--neu-text-muted)', transition: 'color 0.2s ease', pointerEvents: 'none' }}
+        />
+      </button>
+
+      {/* Active indicator dot */}
+      {isActive && (
+        <div style={{
+          position: 'absolute', bottom: -8,
+          width: 5, height: 5, borderRadius: '50%',
+          background: cfg.color,
+          boxShadow: `0 0 6px ${cfg.color}`,
+          left: '50%', transform: 'translateX(-50%)',
+        }} />
+      )}
+
+      {/* Portal Tooltip */}
+      {showTip && tipPos && createPortal(
+        <div style={{
+          position: 'fixed', top: tipPos.top, left: tipPos.left,
+          transform: 'translateX(-50%)',
+          zIndex: 99999, pointerEvents: 'none',
+          display: 'flex', flexDirection: 'column', alignItems: 'center',
+          animation: 'neu-fade-in 0.1s ease both',
+        }}>
+          <div style={{ width: 0, height: 0, borderLeft: '5px solid transparent', borderRight: '5px solid transparent', borderBottom: `6px solid var(--neu-border)` }} />
+          <div style={{
+            background: 'var(--neu-surface)',
+            boxShadow: 'var(--neu-raised-md)',
+            border: '1px solid var(--neu-border)',
+            color: 'var(--neu-text-primary)',
+            fontSize: '0.71rem', fontWeight: 600,
+            padding: '0.28rem 0.65rem', borderRadius: '0.5rem',
+            whiteSpace: 'nowrap', letterSpacing: '0.03em',
+          }}>
+            {cfg.label}
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  )
+}
+
+function DockTabs({ activeTab, setTab }) {
+  const [mouseX, setMouseX] = useState(-9999)
+  const onMove  = useCallback(e => setMouseX(e.clientX), [])
+  const onLeave = useCallback(() => setMouseX(-9999), [])
+
+  return (
+    <div
+      onMouseMove={onMove}
+      onMouseLeave={onLeave}
+      style={{
+        display: 'flex', alignItems: 'flex-end', gap: '10px',
+        padding: '10px 14px 18px',
+        background: 'var(--neu-surface-deep)',
+        boxShadow: 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)',
+        borderRadius: '1.1rem',
+        border: '1px solid var(--neu-border)',
+        width: 'fit-content',
+        overflow: 'visible',
+        position: 'relative',
+      }}
+    >
+      {TAB_CFG.map(cfg => (
+        <DockTabItem
+          key={cfg.key}
+          cfg={cfg}
+          activeTab={activeTab}
+          setTab={setTab}
+          mouseX={mouseX}
+        />
+      ))}
+    </div>
+  )
+}
+
+// ── Main Page ─────────────────────────────────────────────────
 export default function AttendancePage() {
   const [searchParams] = useSearchParams()
   const [offerings, setOfferings] = useState([])
@@ -599,7 +757,11 @@ export default function AttendancePage() {
 
   return (
     <div style={{ maxWidth: 1100, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '1.25rem', paddingBottom: '2rem' }}>
-      <style>{`@keyframes spin { to { transform: rotate(360deg) } } @keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:1} }`}</style>
+      <style>{`
+        @keyframes spin      { to { transform: rotate(360deg) } }
+        @keyframes pulse     { 0%,100%{opacity:.5} 50%{opacity:1} }
+        @keyframes neu-fade-in { from { opacity: 0 } to { opacity: 1 } }
+      `}</style>
 
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1rem' }}>
@@ -627,33 +789,21 @@ export default function AttendancePage() {
         </div>
       ) : (
         <>
-          {/* Tabs */}
-          <div style={{
-            display: 'flex', gap: '0.35rem', flexWrap: 'wrap',
-            background: 'var(--neu-surface-deep)',
-            boxShadow: 'inset 3px 3px 7px var(--neu-shadow-dark), inset -2px -2px 5px var(--neu-shadow-light)',
-            padding: '0.35rem', borderRadius: '1rem', width: 'fit-content',
-          }}>
-            {TAB_CFG.map(t => {
-              const Icon = t.icon
-              const active = tab === t.key
+          {/* Dock Tabs */}
+          <DockTabs activeTab={tab} setTab={setTab} />
+
+          {/* Tab label */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {(() => {
+              const cfg = TAB_CFG.find(t => t.key === tab)
+              const Icon = cfg?.icon
               return (
-                <button key={t.key} onClick={() => setTab(t.key)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '0.45rem',
-                    padding: '0.55rem 1rem', borderRadius: '0.75rem', border: 'none',
-                    background: active ? 'var(--neu-surface)' : 'none',
-                    boxShadow: active ? '4px 4px 10px var(--neu-shadow-dark), -2px -2px 6px var(--neu-shadow-light)' : 'none',
-                    color: active ? 'var(--neu-text-primary)' : 'var(--neu-text-ghost)',
-                    fontSize: '0.8rem', fontWeight: active ? 700 : 600,
-                    fontFamily: "'DM Sans', sans-serif",
-                    cursor: 'pointer', whiteSpace: 'nowrap', transition: 'all 0.18s',
-                  }}
-                >
-                  <Icon size={14} /> {t.label}
-                </button>
+                <>
+                  {Icon && <Icon size={16} style={{ color: cfg.color }} />}
+                  <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>{cfg?.label}</span>
+                </>
               )
-            })}
+            })()}
           </div>
 
           {/* Tab Content */}

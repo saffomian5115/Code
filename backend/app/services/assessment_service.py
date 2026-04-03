@@ -132,6 +132,27 @@ class AssignmentService:
         db.refresh(submission)
         return submission, None
 
+    @staticmethod
+    def delete(db: Session, assignment_id: int):
+        assignment = db.query(Assignment).filter(
+            Assignment.id == assignment_id
+        ).first()
+        if not assignment:
+            return False, "Assignment not found", 404
+
+        try:
+            # Delete submissions first (cascade ke bawajood explicit delete)
+            db.query(AssignmentSubmission).filter(
+                AssignmentSubmission.assignment_id == assignment_id
+            ).delete(synchronize_session=False)
+
+            db.delete(assignment)
+            db.commit()
+            return True, None, 200
+        except Exception as e:
+            db.rollback()
+            return False, str(e), 400
+
 
 class QuizService:
 
