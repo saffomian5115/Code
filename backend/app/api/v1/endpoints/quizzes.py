@@ -202,13 +202,15 @@ def get_quiz_attempts(
     data = [{
         "id": a.id,
         "student_id": a.student_id,
-        "student_name": a.student.student_profile.full_name if a.student and a.student.student_profile else a.student.email,
-        "roll_number": a.student.student_profile.roll_number if a.student and a.student.student_profile else None,
+        "student_name": a.student.student_profile.full_name
+            if a.student and a.student.student_profile
+            else (a.student.email if a.student else "Unknown"),
+        "roll_number": a.student.roll_number if a.student else None,
         "score": float(a.score) if a.score else 0,
         "total_marks": a.total_marks,
         "percentage": float(a.percentage) if a.percentage else 0,
         "status": a.status,
-        "start_time": str(a.start_time),
+        "start_time": str(a.start_time) if a.start_time else None,
         "end_time": str(a.end_time) if a.end_time else None
     } for a in attempts]
 
@@ -217,7 +219,6 @@ def get_quiz_attempts(
         "total": len(data),
         "attempts": data
     }, "Quiz attempts retrieved")
-
 
 @router.get("/quizzes/{quiz_id}/result")
 def get_quiz_result(
