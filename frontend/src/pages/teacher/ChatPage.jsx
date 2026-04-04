@@ -366,17 +366,7 @@ function GroupItem({ group, active, onClick }) {
         >
           {group.name}
         </p>
-        <p
-          style={{
-            fontSize: "0.68rem",
-            color: "var(--neu-text-ghost)",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.3rem",
-          }}
-        >
-          <Users size={10} /> {group.member_count || 0} members
-        </p>
+        
       </div>
 
       {isActive && <ChevronRight size={14} style={{ color, flexShrink: 0 }} />}
