@@ -154,6 +154,26 @@ def get_exam_results(
         "results": data
     }, "Exam results retrieved")
 
+@router.delete("/exams/{exam_id}")
+def delete_exam(
+    exam_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_teacher)
+):
+    exam = ExamService.get_by_id(db, exam_id)
+    if not exam:
+        return error_response("Exam not found", "NOT_FOUND", status_code=404)
+
+    try:
+        from app.models.assessment import ExamResult
+        db.query(ExamResult).filter(ExamResult.exam_id == exam_id).delete(synchronize_session=False)
+        db.delete(exam)
+        db.commit()
+        return success_response(message="Exam deleted successfully")
+    except Exception as e:
+        db.rollback()
+        return error_response(str(e), "DELETE_FAILED", status_code=400)
+
 
 @router.get("/students/{student_id}/results")
 def get_student_semester_results(
