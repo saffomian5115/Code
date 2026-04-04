@@ -94,6 +94,9 @@ export const teacherAPI = {
   gradeSubmission: (submissionId, data) =>
     api.patch(`/submissions/${submissionId}/grade`, data),
 
+  deleteAssignment: (id) =>
+    api.delete(`/assignments/${id}`),
+
 
   // ════════════════════════════════════════════════
   // QUIZZES
@@ -117,6 +120,9 @@ export const teacherAPI = {
   /** GET /quizzes/:id/attempts — all student attempts */
   getQuizAttempts: (quizId) =>
     api.get(`/quizzes/${quizId}/attempts`),
+
+  deleteQuiz: (id) =>
+    api.delete(`/quizzes/${id}`),
 
 
   // ════════════════════════════════════════════════
@@ -145,6 +151,9 @@ export const teacherAPI = {
   getExamResults: (examId) =>
     api.get(`/exams/${examId}/results`),
 
+  deleteExam: (id) =>
+    api.delete(`/exams/${id}`),
+
 
   // ════════════════════════════════════════════════
   // ANNOUNCEMENTS
@@ -168,6 +177,12 @@ export const teacherAPI = {
   /** DELETE /announcements/:id */
   deleteAnnouncement: (id) =>
     api.delete(`/announcements/${id}`),
+
+  getNotices: (page = 1, category = '') => {
+    const params = new URLSearchParams({ page })
+    if (category) params.set('category', category)
+    return api.get(`/notices?${params}`)
+  },
 
 
   // ════════════════════════════════════════════════

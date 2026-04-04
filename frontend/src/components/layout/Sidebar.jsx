@@ -37,6 +37,7 @@ const MENUS = {
     { label: 'Quizzes',      icon: PenSquare,       to: '/teacher/quizzes' },
     { label: 'Results',      icon: BarChart2,       to: '/teacher/results' },
     { label: 'Announcements',icon: Bell,            to: '/teacher/announcements' },
+    { label: 'Notices',      icon: FileText,        to: '/teacher/notices' },
     { label: 'Chat',         icon: MessageSquare,   to: '/teacher/chat' },
   ],
   admin: [

@@ -32,6 +32,8 @@ import QuizzesPage from "./pages/teacher/QuizzesPage";
 import ResultsPage from "./pages/teacher/ResultsPage";
 import TeacherAnnouncementsPage from "./pages/teacher/TeacherAnnouncementsPage";
 import ChatPage from "./pages/teacher/ChatPage";
+import TeacherNoticesPage from './pages/teacher/TeacherNoticesPage'
+
 
 // Phase 3: Student Pages
 import StudentDashboard from "./pages/student/StudentDashboard";
@@ -153,6 +155,7 @@ export default function App() {
                   <Route path="assignments" element={<AssignmentsPage />} />
                   <Route path="quizzes" element={<QuizzesPage />} />
                   <Route path="results" element={<ResultsPage />} />
+                  <Route path="notices" element={<TeacherNoticesPage />} />
                   <Route
                     path="announcements"
                     element={<TeacherAnnouncementsPage />}
