@@ -741,8 +741,8 @@ export default function AttendancePage() {
   const [searchParams] = useSearchParams()
   const [offerings, setOfferings] = useState([])
   const [selectedOffering, setSelectedOffering] = useState(searchParams.get('offering') || '')
-  const [tab, setTab] = useState('mark')
   const [loading, setLoading] = useState(true)
+  const [tab, setTab] = useState('mark')
 
   useEffect(() => {
     teacherAPI.getMyOfferings()

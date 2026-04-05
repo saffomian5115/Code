@@ -869,3 +869,122 @@ body {
 .neu-search input::placeholder {
   color: var(--neu-text-ghost);
 }
+
+/* Add to your global CSS or index.css */
+@keyframes shimmer {
+  0% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0.4;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes pulseRing {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.5;
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 0;
+  }
+}
+
+@keyframes float {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+  100% {
+    transform: translateY(0px);
+  }
+}
+
+@keyframes glow {
+  0% {
+    box-shadow: 0 0 5px rgba(91, 138, 240, 0.2);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(91, 138, 240, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 5px rgba(91, 138, 240, 0.2);
+  }
+}
+
+/* Chart tooltip styles */
+.recharts-tooltip-wrapper {
+  outline: none;
+}
+
+.recharts-default-tooltip {
+  background: var(--neu-surface) !important;
+  border: 1px solid var(--neu-border) !important;
+  border-radius: 0.75rem !important;
+  box-shadow: 8px 8px 20px var(--neu-shadow-dark), -4px -4px 12px var(--neu-shadow-light) !important;
+}
+
+.recharts-tooltip-label {
+  color: var(--neu-text-ghost) !important;
+  font-size: 0.7rem !important;
+  font-weight: 600 !important;
+}
+
+.recharts-tooltip-item {
+  color: var(--neu-text-primary) !important;
+  font-size: 0.85rem !important;
+  font-weight: 700 !important;
+}
+
+/* Chart legend styles */
+.recharts-legend-item-text {
+  color: var(--neu-text-secondary) !important;
+  font-size: 0.7rem !important;
+  font-weight: 500 !important;
+}
+
+/* Custom scrollbar for course list */
+::-webkit-scrollbar {
+  width: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--neu-shadow-dark);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--neu-text-ghost);
+}
