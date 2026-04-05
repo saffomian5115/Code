@@ -25,6 +25,7 @@ const MENUS = {
     { label: 'Results',      icon: BarChart2,       to: '/student/results' },
     { label: 'Fee',          icon: CreditCard,      to: '/student/fee' },
     { label: 'Announcements',icon: Bell,            to: '/student/announcements' },
+    { label: 'Notice Board', icon: FileText,        to: '/student/notices' },
     { label: 'Chat',         icon: MessageSquare,   to: '/student/chat' },
     { label: 'AI Assistant', icon: BrainCircuit,    to: '/student/ai' },
     { label: 'Practice Quiz',  icon: Sparkles,        to: '/student/practice-quiz' },

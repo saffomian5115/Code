@@ -48,6 +48,7 @@ import StudentAnnounce from "./pages/student/AnnouncementsPage";
 import StudentChat from "./pages/student/ChatPage";
 import StudentAI from "./pages/student/AIAssistantPage";
 import StudentPracticeQuiz from './pages/student/PracticeQuizPage'
+import StudentNoticeBoard from './pages/student/NoticeBoardPage'
 
 // ── Route Guards ────────────────────────────────────
 function ProtectedRoute({ children, allowedRoles }) {
@@ -190,6 +191,8 @@ export default function App() {
                   <Route path="results" element={<StudentResults />} />
                   <Route path="fee" element={<StudentFee />} />
                   <Route path="announcements" element={<StudentAnnounce />} />
+                  <Route path="notices" element={<StudentNoticeBoard />} />
+
                   <Route path="chat" element={<StudentChat />} />
                   <Route path="ai" element={<StudentAI />} />
                   <Route path="practice-quiz" element={<StudentPracticeQuiz />} />
