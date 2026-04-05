@@ -1,5 +1,9 @@
 /**
- * student.api.js — Complete Student API Layer (Phase 3)
+ * student.api.js — Complete Student API Layer
+ *
+ * Fix: getStudentSubmissions(studentId) uses the correct backend endpoint:
+ *   GET /students/{studentId}/submissions
+ * This replaces the broken getMySubmission(assignmentId) calls per assignment.
  */
 import api from './axios'
 
@@ -39,8 +43,14 @@ export const studentAPI = {
       headers: { 'Content-Type': 'multipart/form-data' }
     }),
 
-  getMySubmission: (assignmentId) =>
-    api.get(`/assignments/${assignmentId}/my-submission`),
+  /**
+   * GET /students/{studentId}/submissions
+   * Returns ALL submissions for a student across all assignments.
+   * Use this to build a submissionMap keyed by assignment_id.
+   * (No per-assignment /my-submission endpoint exists in backend)
+   */
+  getStudentSubmissions: (studentId) =>
+    api.get(`/students/${studentId}/submissions`),
 
   // ── Quizzes ──────────────────────────────────────
   getOfferingQuizzes: (offeringId) =>
@@ -53,17 +63,17 @@ export const studentAPI = {
     api.post(`/quizzes/${quizId}/submit`, { answers }),
 
   getMyQuizAttempt: (quizId) =>
-    api.get(`/quizzes/${quizId}/my-attempt`),
+    api.get(`/quizzes/${quizId}/result`),
 
   // ── AI Practice Quiz ─────────────────────────────
   generateAIQuiz: (data) =>
-    api.post('/ai-quizzes/generate', data),
+    api.post('/ai-quiz/generate', data),
 
   submitAIQuiz: (data) =>
-    api.post('/ai-quizzes/submit', data),
+    api.post('/ai-quiz/submit', data),
 
   getMyAIQuizHistory: () =>
-    api.get('/ai-quizzes/my-history'),
+    api.get('/ai-quiz/history'),
 
   // ── Results ──────────────────────────────────────
   getMyResults: (studentId, semesterId) =>
@@ -99,7 +109,7 @@ export const studentAPI = {
     api.post('/chatbot/chat', data),
 
   getChatbotFAQs: () =>
-    api.get('/chatbot/faqs'),
+    api.get('/faqs'),
 }
 
 export default studentAPI
