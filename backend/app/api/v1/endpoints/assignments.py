@@ -13,7 +13,39 @@ from app.utils.response import success_response, error_response
 
 router = APIRouter(tags=["Assignments"])
 
+# ─── Helper: Convert server file_path → public URL ──────────────────────────
+def _file_path_to_url(file_path: str | None) -> str | None:
+    """
+    Converts a server-side file path like:
+      uploads/assignments/student_5_assign_3_report.pdf
+    Into a public URL like:
+      /uploads/assignments/student_5_assign_3_report.pdf
 
+    The FastAPI app already mounts /uploads as a StaticFiles directory
+    in main.py, so this URL is directly accessible from the browser.
+    """
+    if not file_path:
+        return None
+    # Normalise path separators (Windows safety)
+    file_path = file_path.replace("\\", "/")
+    # Strip leading "./" or "/" if present so we always produce a clean relative URL
+    if file_path.startswith("./"):
+        file_path = file_path[2:]
+    if not file_path.startswith("/"):
+        file_path = "/" + file_path
+    return file_path
+
+
+def _file_name_from_path(file_path: str | None) -> str | None:
+    """Extract just the filename from the full path."""
+    if not file_path:
+        return None
+    return os.path.basename(file_path)
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# CREATE ASSIGNMENT
+# ────────────────────────────────────────────────────────────────────────────
 @router.post("/offerings/{offering_id}/assignments")
 def create_assignment(
     offering_id: int,
@@ -37,6 +69,9 @@ def create_assignment(
     }, "Assignment created successfully", status_code=201)
 
 
+# ────────────────────────────────────────────────────────────────────────────
+# LIST ASSIGNMENTS FOR AN OFFERING
+# ────────────────────────────────────────────────────────────────────────────
 @router.get("/offerings/{offering_id}/assignments")
 def get_assignments(
     offering_id: int,
@@ -62,6 +97,9 @@ def get_assignments(
     }, "Assignments retrieved")
 
 
+# ────────────────────────────────────────────────────────────────────────────
+# GET SINGLE ASSIGNMENT
+# ────────────────────────────────────────────────────────────────────────────
 @router.get("/assignments/{assignment_id}")
 def get_assignment(
     assignment_id: int,
@@ -87,6 +125,9 @@ def get_assignment(
     })
 
 
+# ────────────────────────────────────────────────────────────────────────────
+# UPDATE ASSIGNMENT
+# ────────────────────────────────────────────────────────────────────────────
 @router.put("/assignments/{assignment_id}")
 def update_assignment(
     assignment_id: int,
@@ -103,6 +144,9 @@ def update_assignment(
     return success_response(message="Assignment updated successfully")
 
 
+# ────────────────────────────────────────────────────────────────────────────
+# STUDENT SUBMIT ASSIGNMENT  ← FIX: save original filename separately
+# ────────────────────────────────────────────────────────────────────────────
 @router.post("/assignments/{assignment_id}/submit")
 def submit_assignment(
     assignment_id: int,
@@ -111,18 +155,24 @@ def submit_assignment(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    upload_dir = f"uploads/assignments"
+    upload_dir = "uploads/assignments"
     os.makedirs(upload_dir, exist_ok=True)
-    file_path = f"{upload_dir}/student_{current_user.id}_assign_{assignment_id}_{file.filename}"
-    
+
+    # Keep original filename safe (strip dangerous chars)
+    original_filename = os.path.basename(file.filename or "submission")
+
+    # Stored filename includes student/assignment IDs to avoid collisions
+    stored_filename = f"student_{current_user.id}_assign_{assignment_id}_{original_filename}"
+    file_path = f"{upload_dir}/{stored_filename}"
+
     with open(file_path, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
-        
+
     data = {
-        "file_path": file_path,
+        "file_path": file_path,       # full server path stored in DB
         "remarks": notes
     }
-    
+
     submission, error = AssignmentService.submit(
         db, assignment_id, current_user.id, data
     )
@@ -135,10 +185,16 @@ def submit_assignment(
         "student_id": submission.student_id,
         "submission_date": str(submission.submission_date),
         "status": submission.status,
-        "file_path": submission.file_path
+        "file_path": submission.file_path,
+        # ← NEW: also return URL and filename for immediate frontend use
+        "file_url": _file_path_to_url(submission.file_path),
+        "file_name": original_filename,
     }, "Assignment submitted successfully", status_code=201)
 
 
+# ────────────────────────────────────────────────────────────────────────────
+# TEACHER VIEW SUBMISSIONS  ← MAIN FIX: add file_url + file_name
+# ────────────────────────────────────────────────────────────────────────────
 @router.get("/assignments/{assignment_id}/submissions")
 def get_submissions(
     assignment_id: int,
@@ -146,18 +202,31 @@ def get_submissions(
     current_user = Depends(require_teacher)
 ):
     submissions = AssignmentService.get_submissions(db, assignment_id)
-    data = [{
-        "id": s.id,
-        "student_id": s.student_id,
-        "roll_number": s.student.roll_number if s.student else None,
-        "full_name": s.student.student_profile.full_name
-            if s.student and s.student.student_profile else None,
-        "submission_date": str(s.submission_date),
-        "status": s.status,
-        "obtained_marks": float(s.obtained_marks) if s.obtained_marks else None,
-        "plagiarism_percentage": float(s.plagiarism_percentage)
-            if s.plagiarism_percentage else None
-    } for s in submissions]
+    data = []
+    for s in submissions:
+        data.append({
+            "id": s.id,
+            "student_id": s.student_id,
+            "roll_number": s.student.roll_number if s.student else None,
+            "full_name": (
+                s.student.student_profile.full_name
+                if s.student and s.student.student_profile else None
+            ),
+            "submission_date": str(s.submission_date),
+            "status": s.status,
+            "obtained_marks": float(s.obtained_marks) if s.obtained_marks else None,
+            "feedback": s.feedback,
+            "plagiarism_percentage": (
+                float(s.plagiarism_percentage) if s.plagiarism_percentage else None
+            ),
+            # ────────────────────────────────────────────────────
+            # FIX: These two fields were MISSING — teacher frontend
+            #      needs file_url to show "Preview" / "Download"
+            #      and file_name for the display label.
+            # ────────────────────────────────────────────────────
+            "file_url": _file_path_to_url(s.file_path),
+            "file_name": _file_name_from_path(s.file_path),
+        })
 
     return success_response({
         "assignment_id": assignment_id,
@@ -168,6 +237,9 @@ def get_submissions(
     }, "Submissions retrieved")
 
 
+# ────────────────────────────────────────────────────────────────────────────
+# GRADE SUBMISSION
+# ────────────────────────────────────────────────────────────────────────────
 @router.patch("/submissions/{submission_id}/grade")
 def grade_submission(
     submission_id: int,
@@ -194,13 +266,17 @@ def grade_submission(
         "graded_at": str(submission.graded_at)
     }, "Submission graded successfully")
 
+
+# ────────────────────────────────────────────────────────────────────────────
+# STUDENT VIEW THEIR OWN SUBMISSIONS  ← FIX: add file_url + file_name
+# ────────────────────────────────────────────────────────────────────────────
 @router.get("/students/{student_id}/submissions")
 def get_student_submissions(
     student_id: int,
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    # Student sirf apni submissions dekh sakta hai
+    # Student can only see their own submissions
     if current_user.role == "student" and current_user.id != student_id:
         return error_response("Access denied", "FORBIDDEN", 403)
 
@@ -225,7 +301,12 @@ def get_student_submissions(
             "obtained_marks": float(sub.obtained_marks) if sub.obtained_marks else None,
             "total_marks": assignment.total_marks if assignment else None,
             "feedback": sub.feedback,
-            "plagiarism_percentage": float(sub.plagiarism_percentage) if sub.plagiarism_percentage else None,
+            "plagiarism_percentage": (
+                float(sub.plagiarism_percentage) if sub.plagiarism_percentage else None
+            ),
+            # ─── FIX: student frontend also needs these for showing submission status ───
+            "file_url": _file_path_to_url(sub.file_path),
+            "file_name": _file_name_from_path(sub.file_path),
         })
 
     return success_response({
@@ -235,6 +316,9 @@ def get_student_submissions(
     }, "Student submissions retrieved")
 
 
+# ────────────────────────────────────────────────────────────────────────────
+# DELETE ASSIGNMENT
+# ────────────────────────────────────────────────────────────────────────────
 @router.delete("/assignments/{assignment_id}")
 def delete_assignment(
     assignment_id: int,
