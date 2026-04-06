@@ -52,7 +52,7 @@ function Field({ label, children }) {
 
 /* ─── Result Screen ──────────────────────────────────────────── */
 function ResultScreen({ result, topic, onReset }) {
-  const score = parseFloat(result.score || 0)
+  const score = parseFloat(result.score ?? result.percentage ?? 0)
   const color = score >= 80 ? '#3ecf8e' : score >= 50 ? '#5b8af0' : '#f87171'
   const emoji = score >= 80 ? '🏆' : score >= 50 ? '👍' : '📚'
 
@@ -96,11 +96,11 @@ function ResultScreen({ result, topic, onReset }) {
           <p style={{ fontSize: '0.72rem', fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.3rem' }}>
             <AlertTriangle size={12} /> Areas to Improve
           </p>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
-            {result.weak_areas_identified.map((w, i) => (
-              <span key={i} style={{ fontSize: '0.72rem', fontWeight: 700, padding: '0.25rem 0.65rem', borderRadius: '0.5rem', background: 'rgba(245,158,11,0.12)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.2)' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+            {result.weak_areas_identified.slice(0, 3).map((w, i) => (
+              <div key={i} style={{ fontSize: '0.75rem', fontWeight: 600, padding: '0.4rem 0.75rem', borderRadius: '0.5rem', background: 'rgba(245,158,11,0.1)', color: '#f59e0b', border: '1px solid rgba(245,158,11,0.2)' }}>
                 {w}
-              </span>
+              </div>
             ))}
           </div>
         </div>
@@ -123,7 +123,8 @@ function ResultScreen({ result, topic, onReset }) {
 
 /* ─── Quiz Attempt Screen ────────────────────────────────────── */
 function QuizAttempt({ quiz, form, answers, setAnswers, onSubmit, onCancel, loading }) {
-  const questions = quiz?.questions_generated || []
+  // questions_generated OR questions field support
+  const questions = quiz?.questions_generated || quiz?.questions || []
   const answered  = Object.keys(answers).length
   const dc        = DIFF_CFG[form.difficulty] || DIFF_CFG.medium
 
@@ -152,17 +153,22 @@ function QuizAttempt({ quiz, form, answers, setAnswers, onSubmit, onCancel, load
       {/* Questions */}
       {questions.map((q, qi) => {
         const opts = q.options || []
+        // question text — support both field names
+        const questionText = q.question || q.question_text || ''
+
         return (
           <div key={qi} style={{ ...neu({ padding: '1.1rem 1.25rem' }) }}>
             <p style={{ fontWeight: 700, fontSize: '0.88rem', color: 'var(--neu-text-primary)', marginBottom: '0.85rem', lineHeight: 1.5 }}>
               <span style={{ color: '#5b8af0', fontWeight: 900, marginRight: '0.35rem', fontFamily: 'Outfit, sans-serif' }}>Q{qi + 1}.</span>
-              {q.question || q.question_text}
+              {questionText}
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
               {opts.map((opt, oi) => {
+                // answers keyed by question index (0-based)
                 const selected = answers[qi] === opt
                 return (
-                  <button key={oi} onClick={() => setAnswers(p => ({ ...p, [qi]: opt }))}
+                  <button key={oi}
+                    onClick={() => setAnswers(p => ({ ...p, [qi]: opt }))}
                     style={{
                       width: '100%', textAlign: 'left', border: 'none', cursor: 'pointer',
                       padding: '0.65rem 1rem', borderRadius: '0.75rem',
@@ -188,6 +194,7 @@ function QuizAttempt({ quiz, form, answers, setAnswers, onSubmit, onCancel, load
                       {String.fromCharCode(65 + oi)}
                     </span>
                     {opt}
+                    {selected && <CheckCircle2 size={14} style={{ marginLeft: 'auto', color: '#5b8af0', flexShrink: 0 }} />}
                   </button>
                 )
               })}
@@ -254,29 +261,64 @@ export default function PracticeQuizPage() {
   }, [])
 
   const handleGenerate = async () => {
-    if (!form.course_id || !form.topic.trim()) { toast.error('Select a course and enter a topic'); return }
+    if (!form.course_id || !form.topic.trim()) {
+      toast.error('Select a course and enter a topic')
+      return
+    }
     setLoading(true)
     try {
-      const res = await studentAPI.generateAIQuiz(form)
-      setQuiz(res.data.data)
+      const res  = await studentAPI.generateAIQuiz({
+        course_id:     parseInt(form.course_id),
+        topic:         form.topic.trim(),
+        difficulty:    form.difficulty,
+        num_questions: form.num_questions,
+      })
+      const data = res.data.data
+      if (!data) throw new Error('No data returned')
+
+      // questions can be in data.questions or data.questions_generated
+      const questions = data.questions || data.questions_generated || []
+      if (questions.length === 0) throw new Error('No questions generated')
+
+      setQuiz(data)
       setAnswers({})
       setPhase('attempt')
-    } catch (err) { toast.error(err.response?.data?.message || 'Failed to generate quiz') }
-    finally { setLoading(false) }
+    } catch (err) {
+      const msg = err.response?.data?.message || err.message || 'Failed to generate quiz'
+      toast.error(msg)
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleSubmit = async () => {
     if (!quiz) return
     setLoading(true)
     try {
-      const res = await studentAPI.submitAIQuiz({ ai_quiz_id: quiz.id, answers })
-      setResult(res.data.data)
+      // answers = { 0: "Option A", 1: "Option C", ... } (0-indexed)
+      const res = await studentAPI.submitAIQuiz({
+        ai_quiz_id: quiz.id,
+        answers:    answers,
+      })
+      const data = res.data.data
+      setResult(data)
       setPhase('result')
-    } catch (err) { toast.error(err.response?.data?.message || 'Submission failed') }
-    finally { setLoading(false) }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Submission failed')
+    } finally {
+      setLoading(false)
+    }
   }
 
-  const reset = () => { setQuiz(null); setAnswers({}); setResult(null); setPhase('setup') }
+  const reset = () => {
+    setQuiz(null)
+    setAnswers({})
+    setResult(null)
+    setPhase('setup')
+  }
+
+  // Derived for display
+  const selectedEnrollment = enrollments.find(e => String(e.course_id) === String(form.course_id))
 
   return (
     <div style={{ maxWidth: 760, margin: '0 auto', paddingBottom: '2rem' }}>
@@ -291,16 +333,29 @@ export default function PracticeQuizPage() {
           <h1 style={{ fontSize: '1.6rem', fontWeight: 800, color: 'var(--neu-text-primary)', fontFamily: 'Outfit, sans-serif' }}>
             AI Practice Quiz
           </h1>
-          <p style={{ fontSize: '0.78rem', color: 'var(--neu-text-ghost)' }}>Auto-generate MCQs for any topic using AI</p>
+          <p style={{ fontSize: '0.78rem', color: 'var(--neu-text-ghost)' }}>Auto-generate MCQs for any topic using Gemini AI</p>
         </div>
       </div>
 
-      {phase === 'result' && result && <ResultScreen result={result} topic={form.topic} onReset={reset} />}
-
-      {phase === 'attempt' && quiz && (
-        <QuizAttempt quiz={quiz} form={form} answers={answers} setAnswers={setAnswers} onSubmit={handleSubmit} onCancel={reset} loading={loading} />
+      {/* Result screen */}
+      {phase === 'result' && result && (
+        <ResultScreen result={result} topic={form.topic} onReset={reset} />
       )}
 
+      {/* Attempt screen */}
+      {phase === 'attempt' && quiz && (
+        <QuizAttempt
+          quiz={quiz}
+          form={form}
+          answers={answers}
+          setAnswers={setAnswers}
+          onSubmit={handleSubmit}
+          onCancel={reset}
+          loading={loading}
+        />
+      )}
+
+      {/* Setup screen */}
       {phase === 'setup' && (
         <div style={{ ...neu({ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.1rem' }) }}>
           {/* Icon header */}
@@ -310,22 +365,31 @@ export default function PracticeQuizPage() {
             </div>
             <div>
               <p style={{ fontWeight: 800, fontSize: '0.9rem', color: 'var(--neu-text-primary)' }}>Generate a Quiz</p>
-              <p style={{ fontSize: '0.72rem', color: 'var(--neu-text-ghost)' }}>Select your course and topic to get AI-generated MCQs</p>
+              <p style={{ fontSize: '0.72rem', color: 'var(--neu-text-ghost)' }}>Powered by Google Gemini AI</p>
             </div>
           </div>
 
-          {/* Course */}
+          {/* Course selector */}
           <Field label="Course *">
             <div style={{ position: 'relative' }}>
-              <select value={form.course_id} onChange={e => set('course_id', e.target.value)} style={iS} disabled={enrLoading}>
+              <select
+                value={form.course_id}
+                onChange={e => set('course_id', e.target.value)}
+                style={iS}
+                disabled={enrLoading}
+              >
                 <option value="">— Select Course —</option>
-                {enrollments.map(e => <option key={e.course_id} value={e.course_id}>{e.course_name}</option>)}
+                {enrollments.map(e => (
+                  <option key={e.offering_id} value={e.course_id || e.offering_id}>
+                    {e.course_name} {e.course_code ? `(${e.course_code})` : ''}
+                  </option>
+                ))}
               </select>
               <ChevronDown size={14} style={{ position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--neu-text-ghost)', pointerEvents: 'none' }} />
             </div>
           </Field>
 
-          {/* Topic */}
+          {/* Topic input */}
           <Field label="Topic *">
             <input
               value={form.topic}
@@ -358,7 +422,7 @@ export default function PracticeQuizPage() {
             </Field>
           </div>
 
-          {/* Difficulty badge preview */}
+          {/* Preview badge */}
           {form.difficulty && (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <span style={{ fontSize: '0.7rem', color: 'var(--neu-text-ghost)' }}>Selected:</span>
@@ -369,7 +433,8 @@ export default function PracticeQuizPage() {
           )}
 
           {/* Generate button */}
-          <button onClick={handleGenerate}
+          <button
+            onClick={handleGenerate}
             disabled={loading || !form.course_id || !form.topic.trim()}
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.55rem',
@@ -387,9 +452,14 @@ export default function PracticeQuizPage() {
               transition: 'all 0.18s',
             }}>
             {loading
-              ? <><Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} /> Generating…</>
+              ? <><Loader2 size={16} style={{ animation: 'spin 0.8s linear infinite' }} /> Generating with Gemini AI…</>
               : <><Sparkles size={16} /> Generate Quiz with AI</>}
           </button>
+
+          {/* Info note */}
+          <p style={{ fontSize: '0.68rem', color: 'var(--neu-text-ghost)', textAlign: 'center', marginTop: '-0.4rem' }}>
+            ✨ Questions are generated by Google Gemini AI in real-time
+          </p>
         </div>
       )}
     </div>

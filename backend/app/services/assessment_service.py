@@ -141,7 +141,6 @@ class AssignmentService:
             return False, "Assignment not found", 404
 
         try:
-            # Delete submissions first (cascade ke bawajood explicit delete)
             db.query(AssignmentSubmission).filter(
                 AssignmentSubmission.assignment_id == assignment_id
             ).delete(synchronize_session=False)
@@ -168,7 +167,6 @@ class QuizService:
         db.add(quiz)
         db.flush()
 
-        # Questions add karo
         for q in questions_data:
             question = QuizQuestion(quiz_id=quiz.id, **q)
             db.add(question)
@@ -206,8 +204,6 @@ class QuizService:
         if not quiz:
             return None, "Quiz not found"
 
-        # ── FIX: Check for existing attempt BEFORE any INSERT
-        # This prevents the (1062) Duplicate entry DB constraint error
         existing = db.query(QuizAttempt).filter(
             QuizAttempt.quiz_id == quiz_id,
             QuizAttempt.student_id == student_id
@@ -215,10 +211,8 @@ class QuizService:
         if existing:
             if existing.status == "completed":
                 return None, "Quiz already completed"
-            # Resume in_progress attempt — return it directly
             return existing, None
 
-        # Time check (only for new attempts)
         now = datetime.now(timezone.utc)
         if quiz.start_time and now < quiz.start_time.replace(tzinfo=timezone.utc):
             return None, "Quiz has not started yet"
@@ -251,7 +245,6 @@ class QuizService:
         if not attempt:
             return None, "No active attempt found"
 
-        # Auto grading
         questions = db.query(QuizQuestion).filter(
             QuizQuestion.quiz_id == quiz_id
         ).all()
@@ -294,26 +287,92 @@ class AIQuizService:
 
     @staticmethod
     def generate(db: Session, student_id: int, data: dict):
-        topic = data["topic"]
-        difficulty = data["difficulty"]
-        num_q = data.get("num_questions", 5)
+        """
+        Gemini AI se real MCQ questions generate karo.
+        """
+        import json
+        from app.ai.gemini_service import GeminiService
+        from app.models.academic import Course
 
-        placeholder_questions = []
-        for i in range(1, num_q + 1):
-            placeholder_questions.append({
-                "id": i,
-                "question": f"Sample {difficulty} question {i} about {topic}?",
-                "options": ["Option A", "Option B", "Option C", "Option D"],
-                "correct_answer": "Option A",
-                "explanation": f"Explanation for question {i}"
-            })
+        topic      = data["topic"]
+        difficulty = data["difficulty"]
+        num_q      = data.get("num_questions", 5)
+        course_id  = data["course_id"]
+
+        # Course name for context
+        course = db.query(Course).filter(Course.id == course_id).first()
+        course_name = course.name if course else "General"
+
+        # Gemini prompt
+        prompt = f"""Generate exactly {num_q} multiple choice questions about "{topic}" for the university course "{course_name}".
+Difficulty level: {difficulty}
+
+Return ONLY a valid JSON array with no extra text, markdown, or code fences. Use this exact format:
+[
+  {{
+    "id": 1,
+    "question": "Question text here?",
+    "options": ["Option A", "Option B", "Option C", "Option D"],
+    "correct_answer": "Option A",
+    "explanation": "Brief explanation of why this is correct"
+  }}
+]
+
+Rules:
+- Each question must have exactly 4 options
+- correct_answer must exactly match one of the 4 options (word for word)
+- Make questions academically relevant to the topic and difficulty level
+- Generate exactly {num_q} questions, numbered 1 to {num_q}
+- Do not include any text outside the JSON array"""
+
+        questions = []
+        try:
+            raw = GeminiService.generate_response(prompt, "")
+            raw = raw.strip()
+
+            # Remove markdown fences if present
+            if "```" in raw:
+                lines = raw.split("\n")
+                raw = "\n".join(
+                    line for line in lines
+                    if not line.strip().startswith("```")
+                )
+
+            # Extract JSON array
+            start = raw.find("[")
+            end   = raw.rfind("]") + 1
+            if start != -1 and end > 0:
+                json_str = raw[start:end]
+                parsed   = json.loads(json_str)
+                for i, q in enumerate(parsed):
+                    if all(k in q for k in ["question", "options", "correct_answer"]):
+                        questions.append({
+                            "id":             i + 1,
+                            "question":       q["question"],
+                            "options":        q["options"][:4],
+                            "correct_answer": q["correct_answer"],
+                            "explanation":    q.get("explanation", ""),
+                        })
+        except Exception as e:
+            print(f"[AIQuizService] Gemini generation error: {e}")
+
+        # Fallback agar Gemini fail ho
+        if not questions:
+            for i in range(1, num_q + 1):
+                questions.append({
+                    "id":             i,
+                    "question":       f"[{difficulty.upper()}] Sample question {i} about {topic}?",
+                    "options":        ["Option A", "Option B", "Option C", "Option D"],
+                    "correct_answer": "Option A",
+                    "explanation":    "AI generation failed. Please try again.",
+                })
 
         ai_quiz = AIQuiz(
             student_id=student_id,
-            course_id=data["course_id"],
+            course_id=course_id,
             topic=topic,
             difficulty=difficulty,
-            questions_generated=placeholder_questions
+            questions_generated=questions
         )
         db.add(ai_quiz)
         db.commit()
@@ -321,7 +380,11 @@ class AIQuizService:
         return ai_quiz, None
 
     @staticmethod
-    def submit(db: Session, ai_quiz_id: int, student_id: int, answers: Dict[int, str]):
+    def submit(db: Session, ai_quiz_id: int, student_id: int, answers: dict):
+        """
+        Student ke answers grade karo.
+        answers = { "0": "Option A", "1": "Option B", ... } (0-indexed from frontend)
+        """
         ai_quiz = db.query(AIQuiz).filter(
             AIQuiz.id == ai_quiz_id,
             AIQuiz.student_id == student_id
@@ -329,28 +392,31 @@ class AIQuizService:
         if not ai_quiz:
             return None, "AI Quiz not found"
 
-        questions = ai_quiz.questions_generated
-        score = 0
+        questions  = ai_quiz.questions_generated or []
+        correct    = 0
         weak_areas = []
 
-        for q in questions:
-            q_id = q["id"]
-            student_ans = answers.get(q_id, "").strip().lower()
-            correct_ans = q["correct_answer"].strip().lower()
+        for i, q in enumerate(questions):
+            # Frontend sends 0-indexed answers: { 0: "Option A", 1: "Option B" }
+            student_ans = answers.get(i) or answers.get(str(i)) or ""
+            correct_ans = q.get("correct_answer", "").strip().lower()
+            given_ans   = str(student_ans).strip().lower()
 
-            if student_ans != correct_ans:
-                weak_areas.append(q["question"])
+            if given_ans == correct_ans:
+                correct += 1
             else:
-                score += 1
+                weak_areas.append(q.get("question", "")[:80])
 
-        percentage = round((score / len(questions) * 100), 2) if questions else 0
+        total      = len(questions)
+        percentage = round((correct / total * 100), 2) if total > 0 else 0
 
-        ai_quiz.student_answers = answers
-        ai_quiz.score = percentage
+        ai_quiz.student_answers       = answers
+        ai_quiz.score                 = percentage
         ai_quiz.weak_areas_identified = weak_areas
         ai_quiz.feedback = (
-            "Great job!" if percentage >= 80
-            else "Review the weak areas identified below."
+            "Excellent work! Outstanding performance! 🎉"     if percentage >= 80 else
+            "Good effort! Review the weak areas listed below." if percentage >= 50 else
+            "Needs improvement. Study the topic carefully and try again."
         )
 
         db.commit()
@@ -375,7 +441,6 @@ class ExamService:
         if not offering:
             return None, "Course offering not found"
 
-        # Same type duplicate check
         existing = db.query(Exam).filter(
             Exam.offering_id == data["offering_id"],
             Exam.exam_type == data["exam_type"]

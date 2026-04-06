@@ -72,7 +72,6 @@ def get_quiz(
     if not quiz:
         return error_response("Quiz not found", "NOT_FOUND", status_code=404)
 
-    # Student ko answers nahi dikhayenge
     is_teacher = current_user.role in ["admin", "teacher"]
     questions = QuizService.get_questions(
         db, quiz_id, shuffle=quiz.shuffle_questions
@@ -106,6 +105,7 @@ def get_quiz(
         "shuffle_questions": quiz.shuffle_questions,
         "questions": questions_data
     })
+
 
 @router.put("/quizzes/{quiz_id}")
 def update_quiz(
@@ -157,20 +157,15 @@ def start_quiz_attempt(
     if error:
         return error_response(error, "ATTEMPT_FAILED")
 
-    # ── FIX: Always fetch and return questions so the modal can display them.
-    # Previously questions were missing from this response, causing the quiz
-    # modal to show 0 questions when resuming an existing attempt.
+    # Questions bhi return karo student ke liye
     quiz = QuizService.get_by_id(db, quiz_id)
     questions = QuizService.get_questions(db, quiz_id, shuffle=quiz.shuffle_questions if quiz else False)
-
     questions_data = [{
         "id": q.id,
         "question_text": q.question_text,
         "question_type": q.question_type,
         "options": q.options,
         "marks": q.marks,
-        "difficulty": q.difficulty,
-        # NOTE: correct_answer intentionally NOT included for students
     } for q in questions]
 
     return success_response({
@@ -180,8 +175,7 @@ def start_quiz_attempt(
         "start_time": str(attempt.start_time),
         "status": attempt.status,
         "total_marks": attempt.total_marks,
-        # Questions included so frontend modal can render them immediately
-        "questions": questions_data,
+        "questions": questions_data
     }, "Quiz started successfully")
 
 
@@ -236,6 +230,7 @@ def get_quiz_attempts(
         "attempts": data
     }, "Quiz attempts retrieved")
 
+
 @router.get("/quizzes/{quiz_id}/result")
 def get_quiz_result(
     quiz_id: int,
@@ -254,6 +249,31 @@ def get_quiz_result(
         "status": attempt.status,
         "answers": attempt.answers
     }, "Quiz result retrieved")
+
+
+# ─── STUDENT: my-attempt endpoint ───────────────────────
+
+@router.get("/quizzes/{quiz_id}/my-attempt")
+def get_my_quiz_attempt(
+    quiz_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user)
+):
+    attempt = QuizService.get_attempt(db, quiz_id, current_user.id)
+    if not attempt:
+        return error_response("No attempt found", "NOT_FOUND", status_code=404)
+
+    return success_response({
+        "quiz_id": quiz_id,
+        "attempt_id": attempt.id,
+        "score": float(attempt.score) if attempt.score else 0,
+        "total_marks": attempt.total_marks,
+        "percentage": float(attempt.percentage) if attempt.percentage else 0,
+        "status": attempt.status,
+        "obtained_marks": float(attempt.score) if attempt.score else 0,
+        "correct_answers": None,
+    }, "Attempt retrieved")
+
 
 @router.delete("/quizzes/{quiz_id}")
 def delete_quiz(
@@ -280,7 +300,9 @@ def delete_quiz(
         return error_response(str(e), "DELETE_FAILED", status_code=400)
 
 
-# ─── AI QUIZZES ─────────────────────────────────────────
+# ═══════════════════════════════════════════════════════
+# AI QUIZZES  — /ai-quiz/generate  &  /ai-quiz/submit
+# ═══════════════════════════════════════════════════════
 
 @router.post("/ai-quiz/generate")
 def generate_ai_quiz(
@@ -288,6 +310,10 @@ def generate_ai_quiz(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    """
+    Gemini AI se MCQ questions generate karo.
+    Frontend: studentAPI.generateAIQuiz(data) → POST /ai-quiz/generate
+    """
     ai_quiz, error = AIQuizService.generate(
         db, current_user.id, request.model_dump()
     )
@@ -295,10 +321,11 @@ def generate_ai_quiz(
         return error_response(error, "GENERATE_FAILED")
 
     return success_response({
-        "ai_quiz_id": ai_quiz.id,
-        "topic": ai_quiz.topic,
-        "difficulty": ai_quiz.difficulty,
-        "questions": ai_quiz.questions_generated
+        "id":           ai_quiz.id,
+        "topic":        ai_quiz.topic,
+        "difficulty":   ai_quiz.difficulty,
+        "questions":    ai_quiz.questions_generated,
+        "questions_generated": ai_quiz.questions_generated,
     }, "AI Quiz generated successfully", status_code=201)
 
 
@@ -308,6 +335,10 @@ def submit_ai_quiz(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
+    """
+    Student ke answers submit karo and score calculate karo.
+    Frontend: studentAPI.submitAIQuiz({ ai_quiz_id, answers })
+    """
     ai_quiz, error = AIQuizService.submit(
         db, request.ai_quiz_id, current_user.id, request.answers
     )
@@ -315,10 +346,13 @@ def submit_ai_quiz(
         return error_response(error, "SUBMIT_FAILED")
 
     return success_response({
-        "ai_quiz_id": ai_quiz.id,
-        "score": float(ai_quiz.score),
-        "feedback": ai_quiz.feedback,
-        "weak_areas": ai_quiz.weak_areas_identified
+        "ai_quiz_id":          ai_quiz.id,
+        "score":               float(ai_quiz.score),
+        "percentage":          float(ai_quiz.score),
+        "feedback":            ai_quiz.feedback,
+        "weak_areas_identified": ai_quiz.weak_areas_identified or [],
+        "obtained_marks":      float(ai_quiz.score),
+        "total_marks":         100,
     }, "AI Quiz submitted successfully")
 
 
@@ -332,16 +366,16 @@ def get_ai_quiz_history(
         db, current_user.id, course_id
     )
     data = [{
-        "id": q.id,
-        "topic": q.topic,
-        "difficulty": q.difficulty,
-        "score": float(q.score) if q.score else None,
-        "feedback": q.feedback,
-        "weak_areas": q.weak_areas_identified,
-        "created_at": str(q.created_at)
+        "id":          q.id,
+        "topic":       q.topic,
+        "difficulty":  q.difficulty,
+        "score":       float(q.score) if q.score else None,
+        "feedback":    q.feedback,
+        "weak_areas":  q.weak_areas_identified,
+        "created_at":  str(q.created_at)
     } for q in quizzes]
 
     return success_response({
-        "total": len(data),
+        "total":   len(data),
         "history": data
     }, "AI Quiz history retrieved")
