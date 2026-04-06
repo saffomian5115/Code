@@ -118,11 +118,9 @@ def update_quiz(
     if not quiz:
         return error_response("Quiz not found", "NOT_FOUND", status_code=404)
 
-    # Only creator or admin can update
     if current_user.role != "admin" and quiz.created_by != current_user.id:
         return error_response("Not authorized to update this quiz", "FORBIDDEN", status_code=403)
 
-    # Cannot update if attempts already exist
     if quiz.attempts:
         return error_response(
             "Cannot edit quiz — students have already attempted it",
@@ -159,13 +157,31 @@ def start_quiz_attempt(
     if error:
         return error_response(error, "ATTEMPT_FAILED")
 
+    # ── FIX: Always fetch and return questions so the modal can display them.
+    # Previously questions were missing from this response, causing the quiz
+    # modal to show 0 questions when resuming an existing attempt.
+    quiz = QuizService.get_by_id(db, quiz_id)
+    questions = QuizService.get_questions(db, quiz_id, shuffle=quiz.shuffle_questions if quiz else False)
+
+    questions_data = [{
+        "id": q.id,
+        "question_text": q.question_text,
+        "question_type": q.question_type,
+        "options": q.options,
+        "marks": q.marks,
+        "difficulty": q.difficulty,
+        # NOTE: correct_answer intentionally NOT included for students
+    } for q in questions]
+
     return success_response({
         "attempt_id": attempt.id,
         "quiz_id": attempt.quiz_id,
         "student_id": attempt.student_id,
         "start_time": str(attempt.start_time),
         "status": attempt.status,
-        "total_marks": attempt.total_marks
+        "total_marks": attempt.total_marks,
+        # Questions included so frontend modal can render them immediately
+        "questions": questions_data,
     }, "Quiz started successfully")
 
 

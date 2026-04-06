@@ -206,7 +206,8 @@ class QuizService:
         if not quiz:
             return None, "Quiz not found"
 
-        # Already attempted check
+        # ── FIX: Check for existing attempt BEFORE any INSERT
+        # This prevents the (1062) Duplicate entry DB constraint error
         existing = db.query(QuizAttempt).filter(
             QuizAttempt.quiz_id == quiz_id,
             QuizAttempt.student_id == student_id
@@ -214,9 +215,10 @@ class QuizService:
         if existing:
             if existing.status == "completed":
                 return None, "Quiz already completed"
-            return existing, None  # Resume karo
+            # Resume in_progress attempt — return it directly
+            return existing, None
 
-        # Time check
+        # Time check (only for new attempts)
         now = datetime.now(timezone.utc)
         if quiz.start_time and now < quiz.start_time.replace(tzinfo=timezone.utc):
             return None, "Quiz has not started yet"
@@ -292,8 +294,6 @@ class AIQuizService:
 
     @staticmethod
     def generate(db: Session, student_id: int, data: dict):
-        # Ollama se MCQ generate karna — Phase 8 mein implement hoga
-        # Abhi placeholder questions banate hain
         topic = data["topic"]
         difficulty = data["difficulty"]
         num_q = data.get("num_questions", 5)
@@ -412,11 +412,9 @@ class ExamService:
 
         saved = []
         for r in results:
-            # Marks exceed check
             if r["obtained_marks"] > exam.total_marks:
                 return None, f"Student {r['student_id']}: marks exceed total ({exam.total_marks})"
 
-            # Grade auto-calculate
             grade = ExamService._calculate_grade(
                 r["obtained_marks"], exam.total_marks
             )
