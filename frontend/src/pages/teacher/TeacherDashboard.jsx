@@ -268,7 +268,7 @@ export default function TeacherDashboard() {
     })()
   }, [])
 
-  const firstName = user?.full_name?.split(' ')[0] || 'Teacher'
+  const firstName = user?.full_name || 'Teacher'
   const totalOfferings = offerings.length
   
   // Use animated values or fallback to actual values

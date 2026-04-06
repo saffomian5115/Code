@@ -79,18 +79,31 @@ def get_my_enrollments(
     current_user = Depends(require_student)
 ):
     enrollments = EnrollmentService.get_student_enrollments(db, current_user.id, semester_id)
+
+    # CGPA calculate karo
+    cgpa = StudentProgramService.calculate_cgpa(db, current_user.id)
+
     data = [{
+        "enrollment_id": e.id,
         "offering_id": e.offering_id,
+        "course_id": e.offering.course.id if e.offering and e.offering.course else None,
         "course_code": e.offering.course.code if e.offering and e.offering.course else None,
         "course_name": e.offering.course.name if e.offering and e.offering.course else None,
+        "credit_hours": e.offering.course.credit_hours if e.offering and e.offering.course else None,
         "section": e.offering.section if e.offering else None,
+        # FIX: semester_id aur semester_name add kiye gaye
+        "semester_id": e.offering.semester_id if e.offering else None,
+        "semester_name": e.offering.semester.name if e.offering and e.offering.semester else None,
         "instructor": e.offering.instructor.full_name if e.offering and e.offering.instructor else None,
         "status": e.status,
-        "is_approved": e.is_approved
+        "is_approved": e.is_approved,
+        "grade_letter": e.grade_letter,
+        "grade_points": float(e.grade_points) if e.grade_points else None,
     } for e in enrollments]
-    
+
     return success_response({
         "total": len(data),
+        "cgpa": cgpa,
         "enrollments": data
     }, "Enrollments retrieved")
 
@@ -254,7 +267,6 @@ def delete_student(
     if not student:
         return error_response("Student not found", "NOT_FOUND", status_code=404)
     try:
-        # Raw SQL se force delete — MySQL CASCADE handle karega
         db.execute(
             __import__('sqlalchemy').text("DELETE FROM users WHERE id = :id"),
             {"id": student_id}

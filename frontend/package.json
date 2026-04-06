@@ -12,7 +12,9 @@
   "dependencies": {
     "@mediapipe/face_detection": "^0.4.1646425229",
     "axios": "^1.13.5",
+    "framer-motion": "^12.38.0",
     "gsap": "^3.14.2",
+    "list": "^2.0.19",
     "lucide-react": "^0.575.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
