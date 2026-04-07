@@ -39,9 +39,9 @@ export const studentAPI = {
       headers: { 'Content-Type': 'multipart/form-data' }
     }),
 
-  getMySubmission: (assignmentId) =>
-    api.get(`/assignments/${assignmentId}/my-submission`),
-
+  getStudentSubmissions: (studentId) =>
+    api.get(`/students/${studentId}/submissions`),
+ 
   // ── Quizzes ──────────────────────────────────────
   getOfferingQuizzes: (offeringId) =>
     api.get(`/offerings/${offeringId}/quizzes`),

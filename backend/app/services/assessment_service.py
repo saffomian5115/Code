@@ -14,7 +14,6 @@ class AssignmentService:
 
     @staticmethod
     def create(db: Session, data: dict, teacher_id: int):
-        # Offering exist check
         offering = db.query(CourseOffering).filter(
             CourseOffering.id == data["offering_id"]
         ).first()
@@ -47,10 +46,8 @@ class AssignmentService:
         ).first()
         if not assignment:
             return None, "Assignment not found"
-
         for key, value in data.items():
             setattr(assignment, key, value)
-
         db.commit()
         db.refresh(assignment)
         return assignment, None
@@ -63,7 +60,6 @@ class AssignmentService:
         if not assignment:
             return None, "Assignment not found"
 
-        # Already submitted check
         existing = db.query(AssignmentSubmission).filter(
             AssignmentSubmission.assignment_id == assignment_id,
             AssignmentSubmission.student_id == student_id
@@ -71,11 +67,8 @@ class AssignmentService:
         if existing:
             return None, "Assignment already submitted"
 
-        # Late check
         now = datetime.now(timezone.utc)
-        status = "late" if now > assignment.due_date.replace(
-            tzinfo=timezone.utc
-        ) else "submitted"
+        status = "late" if now > assignment.due_date.replace(tzinfo=timezone.utc) else "submitted"
 
         submission = AssignmentSubmission(
             assignment_id=assignment_id,
@@ -103,21 +96,14 @@ class AssignmentService:
         ).first()
 
     @staticmethod
-    def grade_submission(
-        db: Session,
-        submission_id: int,
-        obtained_marks: float,
-        feedback: str,
-        graded_by: int,
-        status: str
-    ):
+    def grade_submission(db: Session, submission_id: int, obtained_marks: float,
+                         feedback: str, graded_by: int, status: str):
         submission = db.query(AssignmentSubmission).filter(
             AssignmentSubmission.id == submission_id
         ).first()
         if not submission:
             return None, "Submission not found"
 
-        # Marks exceed check
         assignment = submission.assignment
         if obtained_marks > assignment.total_marks:
             return None, f"Marks cannot exceed total marks ({assignment.total_marks})"
@@ -127,7 +113,6 @@ class AssignmentService:
         submission.graded_by = graded_by
         submission.graded_at = datetime.now(timezone.utc)
         submission.status = status
-
         db.commit()
         db.refresh(submission)
         return submission, None
@@ -139,12 +124,10 @@ class AssignmentService:
         ).first()
         if not assignment:
             return False, "Assignment not found", 404
-
         try:
             db.query(AssignmentSubmission).filter(
                 AssignmentSubmission.assignment_id == assignment_id
             ).delete(synchronize_session=False)
-
             db.delete(assignment)
             db.commit()
             return True, None, 200
@@ -158,7 +141,6 @@ class QuizService:
     @staticmethod
     def create(db: Session, data: dict, teacher_id: int):
         questions_data = data.pop("questions", [])
-
         data["created_by"] = teacher_id
         data["total_questions"] = len(questions_data)
         data["quiz_type"] = "teacher"
@@ -191,11 +173,9 @@ class QuizService:
         questions = db.query(QuizQuestion).filter(
             QuizQuestion.quiz_id == quiz_id
         ).all()
-
         if shuffle:
             import random
             random.shuffle(questions)
-
         return questions
 
     @staticmethod
@@ -204,6 +184,8 @@ class QuizService:
         if not quiz:
             return None, "Quiz not found"
 
+        # ── STEP 1: Check existing attempt BEFORE any INSERT ──────────────
+        # Handles normal cases: second click, page refresh, back-button, etc.
         existing = db.query(QuizAttempt).filter(
             QuizAttempt.quiz_id == quiz_id,
             QuizAttempt.student_id == student_id
@@ -211,32 +193,46 @@ class QuizService:
         if existing:
             if existing.status == "completed":
                 return None, "Quiz already completed"
-            return existing, None
+            return existing, None  # Resume in_progress
 
+        # ── STEP 2: Time check ────────────────────────────────────────────
         now = datetime.now(timezone.utc)
         if quiz.start_time and now < quiz.start_time.replace(tzinfo=timezone.utc):
             return None, "Quiz has not started yet"
         if quiz.end_time and now > quiz.end_time.replace(tzinfo=timezone.utc):
             return None, "Quiz time has ended"
 
-        attempt = QuizAttempt(
-            quiz_id=quiz_id,
-            student_id=student_id,
-            total_marks=quiz.total_marks,
-            status="in_progress"
-        )
-        db.add(attempt)
-        db.commit()
-        db.refresh(attempt)
-        return attempt, None
+        # ── STEP 3: INSERT with try/except for race-condition duplicates ───
+        # If two requests arrive at the same millisecond (double-click, etc.)
+        # the SELECT in step 1 both return None, then both try to INSERT.
+        # The second INSERT hits the unique constraint — we catch it and
+        # return the row that the first request successfully created.
+        try:
+            attempt = QuizAttempt(
+                quiz_id=quiz_id,
+                student_id=student_id,
+                total_marks=quiz.total_marks,
+                status="in_progress"
+            )
+            db.add(attempt)
+            db.commit()
+            db.refresh(attempt)
+            return attempt, None
+        except Exception:
+            db.rollback()
+            # Fetch the row the concurrent request created
+            existing = db.query(QuizAttempt).filter(
+                QuizAttempt.quiz_id == quiz_id,
+                QuizAttempt.student_id == student_id
+            ).first()
+            if existing:
+                if existing.status == "completed":
+                    return None, "Quiz already completed"
+                return existing, None
+            return None, "Could not create quiz attempt, please try again"
 
     @staticmethod
-    def submit_attempt(
-        db: Session,
-        quiz_id: int,
-        student_id: int,
-        answers: Dict[int, str]
-    ):
+    def submit_attempt(db: Session, quiz_id: int, student_id: int, answers: Dict[int, str]):
         attempt = db.query(QuizAttempt).filter(
             QuizAttempt.quiz_id == quiz_id,
             QuizAttempt.student_id == student_id,
@@ -251,7 +247,8 @@ class QuizService:
 
         score = 0
         for q in questions:
-            student_ans = answers.get(q.id, "").strip().lower()
+            # Convert answer key to int in case frontend sends string keys
+            student_ans = str(answers.get(q.id) or answers.get(str(q.id)) or "").strip().lower()
             correct_ans = q.correct_answer.strip().lower()
             if student_ans == correct_ans:
                 score += q.marks
@@ -456,21 +453,14 @@ class ExamService:
 
     @staticmethod
     def get_offering_exams(db: Session, offering_id: int):
-        return db.query(Exam).filter(
-            Exam.offering_id == offering_id
-        ).all()
+        return db.query(Exam).filter(Exam.offering_id == offering_id).all()
 
     @staticmethod
     def get_by_id(db: Session, exam_id: int):
         return db.query(Exam).filter(Exam.id == exam_id).first()
 
     @staticmethod
-    def enter_bulk_results(
-        db: Session,
-        exam_id: int,
-        results: list,
-        entered_by: int
-    ):
+    def enter_bulk_results(db: Session, exam_id: int, results: list, entered_by: int):
         exam = db.query(Exam).filter(Exam.id == exam_id).first()
         if not exam:
             return None, "Exam not found"
@@ -480,9 +470,7 @@ class ExamService:
             if r["obtained_marks"] > exam.total_marks:
                 return None, f"Student {r['student_id']}: marks exceed total ({exam.total_marks})"
 
-            grade = ExamService._calculate_grade(
-                r["obtained_marks"], exam.total_marks
-            )
+            grade = ExamService._calculate_grade(r["obtained_marks"], exam.total_marks)
 
             existing = db.query(ExamResult).filter(
                 ExamResult.exam_id == exam_id,
@@ -511,9 +499,7 @@ class ExamService:
 
     @staticmethod
     def get_exam_results(db: Session, exam_id: int):
-        return db.query(ExamResult).filter(
-            ExamResult.exam_id == exam_id
-        ).all()
+        return db.query(ExamResult).filter(ExamResult.exam_id == exam_id).all()
 
     @staticmethod
     def get_student_result(db: Session, exam_id: int, student_id: int):
