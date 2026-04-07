@@ -159,9 +159,7 @@ function AnnCard({ ann, onClick }) {
             <h3 style={{ fontSize: '.95rem', fontWeight: 700, color: 'var(--neu-text-primary)', margin: 0 }}>
               {ann.title}
             </h3>
-            <span style={{ fontSize: '.65rem', fontWeight: 600, padding: '.2rem .7rem', borderRadius: '2rem', background: pri.bg, color: pri.color }}>
-              {pri.label}
-            </span>
+            
           </div>
           
           <p style={{ 
@@ -174,15 +172,13 @@ function AnnCard({ ann, onClick }) {
           </p>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '.8rem', flexWrap: 'wrap' }}>
+            
             <span style={{ fontSize: '.68rem', color: 'var(--neu-text-ghost)', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
-              <span>👥</span> {target?.label || ann.target_type}
-            </span>
-            <span style={{ fontSize: '.68rem', color: 'var(--neu-text-ghost)', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
-              <span>📅</span> {new Date(ann.created_at).toLocaleDateString()}
+              {new Date(ann.created_at).toLocaleDateString()}
             </span>
             {ann.pinned_until && (
               <span style={{ fontSize: '.68rem', color: '#22a06b', display: 'flex', alignItems: 'center', gap: '.3rem' }}>
-                <span>📌</span> Pinned
+                <span>📌</span> 
               </span>
             )}
           </div>

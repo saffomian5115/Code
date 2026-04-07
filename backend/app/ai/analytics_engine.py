@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, desc
 from datetime import datetime, timezone
 from typing import Optional
 from app.models.attendance import AttendanceSummary, CampusAttendance
@@ -9,6 +9,7 @@ from app.models.assessment import (
 from app.models.enrollment import Enrollment, CourseOffering
 from app.models.ai_analytics import StudentPerformanceScore
 from app.models.academic import Semester
+
 
 
 class AnalyticsEngine:
@@ -171,6 +172,25 @@ class AnalyticsEngine:
         )
         academic_score = round(min(academic_score, 100), 2)
 
+                # ── Trend Direction ──────────────────────────────────────
+        # Previous semester score compare karo
+        previous_score = db.query(StudentPerformanceScore).filter(
+            StudentPerformanceScore.student_id == student_id,
+            StudentPerformanceScore.semester_id != semester_id
+        ).order_by(StudentPerformanceScore.calculated_at.desc()).first()
+
+        if previous_score:
+            diff = academic_score - float(previous_score.academic_score)
+            if diff >= 5:
+                trend = "improving"
+            elif diff <= -5:
+                trend = "declining"
+            else:
+                trend = "stable"
+        else:
+            trend = "stable"  # Pehla semester, koi comparison nahi
+
+
         # ── Engagement Level ─────────────────────────────
         if academic_score >= 75:
             engagement = "high"
@@ -211,7 +231,8 @@ class AnalyticsEngine:
             "risk_prediction": risk,
             "weak_subjects": weak_subjects,
             "recommendations": recommendations,
-            "score_breakdown": breakdown
+            "score_breakdown": breakdown,
+            "trend_direction": trend
         }
 
     @staticmethod
@@ -327,6 +348,19 @@ class AnalyticsEngine:
             db.commit()
             db.refresh(existing)
             return existing
+        
+        # Improvement index — current vs previous score difference (0-100 scale)
+        previous = db.query(StudentPerformanceScore).filter(
+            StudentPerformanceScore.student_id == data["student_id"],
+            StudentPerformanceScore.semester_id != data["semester_id"]
+        ).order_by(StudentPerformanceScore.calculated_at.desc()).first()
+
+        if previous:
+            raw_diff = data["academic_score"] - float(previous.academic_score)
+            # -100 to +100 range ko 0-100 scale pe map karo
+            data["improvement_index"] = min(max(round(50 + raw_diff * 0.5, 2), 0), 100)
+        else:
+            data["improvement_index"] = 50.0  # Neutral — pehla semester
 
         score = StudentPerformanceScore(
             **data,
@@ -339,7 +373,7 @@ class AnalyticsEngine:
 
     @staticmethod
     def calculate_ranks(db: Session, semester_id: int):
-        # Sab scores lao is semester ke
+        # Class rank — saare students
         scores = db.query(StudentPerformanceScore).filter(
             StudentPerformanceScore.semester_id == semester_id
         ).order_by(
@@ -349,5 +383,41 @@ class AnalyticsEngine:
         for rank, score in enumerate(scores, 1):
             score.class_rank = rank
 
+        # Section rank — offering ke andar students
+        # Har offering ke enrolled students ka section rank
+        from app.models.enrollment import Enrollment, CourseOffering
+
+        # Saare offerings is semester ke
+        offering_ids = [
+            row[0] for row in db.query(CourseOffering.id).filter(
+                CourseOffering.semester_id == semester_id
+            ).all()
+        ]
+
+        for offering_id in offering_ids:
+            # Is offering ke enrolled students
+            enrolled_student_ids = [
+                row[0] for row in db.query(Enrollment.student_id).filter(
+                    Enrollment.offering_id == offering_id,
+                    Enrollment.status == "enrolled"
+                ).all()
+            ]
+
+            if not enrolled_student_ids:
+                continue
+
+            # Un students ke scores
+            section_scores = db.query(StudentPerformanceScore).filter(
+                StudentPerformanceScore.semester_id == semester_id,
+                StudentPerformanceScore.student_id.in_(enrolled_student_ids)
+            ).order_by(
+                StudentPerformanceScore.academic_score.desc()
+            ).all()
+
+            for s_rank, score in enumerate(section_scores, 1):
+                score.section_rank = s_rank
+
         db.commit()
         return len(scores)
+
+    

@@ -139,3 +139,44 @@ def calculate_ranks(
         "semester_id": semester_id,
         "students_ranked": count
     }, f"Ranks calculated for {count} students")
+
+@router.post("/bulk-calculate")
+def bulk_calculate_analytics(
+    request: BulkAnalyticsRequest,
+    db: Session = Depends(get_db),
+    admin = Depends(require_admin)
+):
+    from app.models.enrollment import Enrollment, CourseOffering
+
+    # Is semester ke saare enrolled students dhundo
+    query = db.query(Enrollment.student_id).join(CourseOffering).filter(
+        CourseOffering.semester_id == request.semester_id,
+        Enrollment.status == "enrolled"
+    )
+    if request.offering_id:
+        query = query.filter(CourseOffering.id == request.offering_id)
+
+    student_ids = [row[0] for row in query.distinct().all()]
+
+    if not student_ids:
+        return error_response("No enrolled students found", "NOT_FOUND", status_code=404)
+
+    success_count = 0
+    failed_count = 0
+    failed_ids = []
+
+    for student_id in student_ids:
+        try:
+            AnalyticsService.calculate_and_save(db, student_id, request.semester_id)
+            success_count += 1
+        except Exception:
+            failed_count += 1
+            failed_ids.append(student_id)
+
+    return success_response({
+        "semester_id": request.semester_id,
+        "total_students": len(student_ids),
+        "success_count": success_count,
+        "failed_count": failed_count,
+        "failed_student_ids": failed_ids
+    }, f"Bulk analytics done: {success_count} success, {failed_count} failed")
