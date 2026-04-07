@@ -10,7 +10,7 @@ import {
   Plus, FileText, Loader2, Calendar, Users, Award, X, Clock,
   AlertCircle, CheckCircle, Upload, Eye, Trash2,
   CircleCheck, Download, File, FileArchive, FileImage,
-  FileCode, FileJson, FileSpreadsheet,
+  FileCode, FileJson, FileSpreadsheet,ScanSearch,
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useSearchParams } from 'react-router-dom'
@@ -18,6 +18,8 @@ import { teacherAPI } from '../../api/teacher.api'
 import { useContextMenu, ContextMenu } from '../../hooks/useContextMenu'
 import api from '../../api/axios'
 import AddButton from '../../components/ui/AddButton'
+import PlagiarismReportModal from '../../components/teacher/PlagiarismReportModal'
+
 
 // ─── Backend base URL (same as axios baseURL minus /api/v1) ──────────────────
 // The backend mounts  /uploads  as a StaticFiles directory.
@@ -670,6 +672,8 @@ export default function AssignmentsPage() {
   const [loading,          setLoading]          = useState(false)
   const [showCreate,       setShowCreate]       = useState(false)
   const [viewSubmissions,  setViewSubmissions]  = useState(null)
+  const [plagModal, setPlagModal] = useState(null)
+
 
   const { menu, open: openMenu, close: closeMenu } = useContextMenu()
 
@@ -726,6 +730,7 @@ export default function AssignmentsPage() {
     { label: 'View Submissions', icon: Users, onClick: a => setViewSubmissions(a) },
     { divider: true },
     { label: 'Delete', icon: Trash2, danger: true, onClick: a => handleDelete(a) },
+    { label: 'Check Plagiarism', icon: ScanSearch, onClick: a => setPlagModal(a) },
   ]
 
   const now      = new Date()
@@ -809,6 +814,12 @@ export default function AssignmentsPage() {
           items={menu ? ctxItems() : []}
         />
       </div>
+      {plagModal && (
+  <PlagiarismReportModal
+    assignment={plagModal}
+    onClose={() => setPlagModal(null)}
+  />
+)}
     </>
   )
 }

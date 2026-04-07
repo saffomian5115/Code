@@ -1,3 +1,11 @@
+"""
+assignments.py  (UPDATED)
+Added two new endpoints at the bottom:
+  POST /assignments/{id}/check-plagiarism  → run check
+  GET  /assignments/{id}/plagiarism-report → read saved results
+All existing routes unchanged.
+"""
+
 from fastapi import APIRouter, Depends, UploadFile, File, Form
 import os
 import shutil
@@ -13,22 +21,11 @@ from app.utils.response import success_response, error_response
 
 router = APIRouter(tags=["Assignments"])
 
-# ─── Helper: Convert server file_path → public URL ──────────────────────────
+# ─── Helper: Convert server file_path → public URL ─────────────────────────────
 def _file_path_to_url(file_path: str | None) -> str | None:
-    """
-    Converts a server-side file path like:
-      uploads/assignments/student_5_assign_3_report.pdf
-    Into a public URL like:
-      /uploads/assignments/student_5_assign_3_report.pdf
-
-    The FastAPI app already mounts /uploads as a StaticFiles directory
-    in main.py, so this URL is directly accessible from the browser.
-    """
     if not file_path:
         return None
-    # Normalise path separators (Windows safety)
     file_path = file_path.replace("\\", "/")
-    # Strip leading "./" or "/" if present so we always produce a clean relative URL
     if file_path.startswith("./"):
         file_path = file_path[2:]
     if not file_path.startswith("/"):
@@ -37,7 +34,6 @@ def _file_path_to_url(file_path: str | None) -> str | None:
 
 
 def _file_name_from_path(file_path: str | None) -> str | None:
-    """Extract just the filename from the full path."""
     if not file_path:
         return None
     return os.path.basename(file_path)
@@ -145,7 +141,7 @@ def update_assignment(
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# STUDENT SUBMIT ASSIGNMENT  ← FIX: save original filename separately
+# STUDENT SUBMIT ASSIGNMENT
 # ────────────────────────────────────────────────────────────────────────────
 @router.post("/assignments/{assignment_id}/submit")
 def submit_assignment(
@@ -158,10 +154,7 @@ def submit_assignment(
     upload_dir = "uploads/assignments"
     os.makedirs(upload_dir, exist_ok=True)
 
-    # Keep original filename safe (strip dangerous chars)
     original_filename = os.path.basename(file.filename or "submission")
-
-    # Stored filename includes student/assignment IDs to avoid collisions
     stored_filename = f"student_{current_user.id}_assign_{assignment_id}_{original_filename}"
     file_path = f"{upload_dir}/{stored_filename}"
 
@@ -169,7 +162,7 @@ def submit_assignment(
         shutil.copyfileobj(file.file, buffer)
 
     data = {
-        "file_path": file_path,       # full server path stored in DB
+        "file_path": file_path,
         "remarks": notes
     }
 
@@ -186,14 +179,13 @@ def submit_assignment(
         "submission_date": str(submission.submission_date),
         "status": submission.status,
         "file_path": submission.file_path,
-        # ← NEW: also return URL and filename for immediate frontend use
         "file_url": _file_path_to_url(submission.file_path),
         "file_name": original_filename,
     }, "Assignment submitted successfully", status_code=201)
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# TEACHER VIEW SUBMISSIONS  ← MAIN FIX: add file_url + file_name
+# TEACHER VIEW SUBMISSIONS
 # ────────────────────────────────────────────────────────────────────────────
 @router.get("/assignments/{assignment_id}/submissions")
 def get_submissions(
@@ -219,11 +211,8 @@ def get_submissions(
             "plagiarism_percentage": (
                 float(s.plagiarism_percentage) if s.plagiarism_percentage else None
             ),
-            # ────────────────────────────────────────────────────
-            # FIX: These two fields were MISSING — teacher frontend
-            #      needs file_url to show "Preview" / "Download"
-            #      and file_name for the display label.
-            # ────────────────────────────────────────────────────
+            "plagiarism_status": s.plagiarism_status,
+            "plagiarism_data": s.plagiarism_data,
             "file_url": _file_path_to_url(s.file_path),
             "file_name": _file_name_from_path(s.file_path),
         })
@@ -268,7 +257,7 @@ def grade_submission(
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# STUDENT VIEW THEIR OWN SUBMISSIONS  ← FIX: add file_url + file_name
+# STUDENT VIEW THEIR OWN SUBMISSIONS
 # ────────────────────────────────────────────────────────────────────────────
 @router.get("/students/{student_id}/submissions")
 def get_student_submissions(
@@ -276,7 +265,6 @@ def get_student_submissions(
     db: Session = Depends(get_db),
     current_user = Depends(get_current_user)
 ):
-    # Student can only see their own submissions
     if current_user.role == "student" and current_user.id != student_id:
         return error_response("Access denied", "FORBIDDEN", 403)
 
@@ -304,7 +292,6 @@ def get_student_submissions(
             "plagiarism_percentage": (
                 float(sub.plagiarism_percentage) if sub.plagiarism_percentage else None
             ),
-            # ─── FIX: student frontend also needs these for showing submission status ───
             "file_url": _file_path_to_url(sub.file_path),
             "file_name": _file_name_from_path(sub.file_path),
         })
@@ -330,3 +317,54 @@ def delete_assignment(
         return error_response(error, "DELETE_FAILED", status_code=status_code)
 
     return success_response(message="Assignment deleted successfully")
+
+
+# ════════════════════════════════════════════════════════════════════════════
+# ✅ NEW — PLAGIARISM ENDPOINTS
+# ════════════════════════════════════════════════════════════════════════════
+
+@router.post("/assignments/{assignment_id}/check-plagiarism")
+async def check_plagiarism(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_teacher)
+):
+    """
+    Run internal plagiarism check for all submissions of an assignment.
+    Compares every student's file against every other student's file.
+    Saves results to DB and returns summary + pair details.
+    
+    This can take a few seconds depending on number of submissions.
+    """
+    from app.services.plagiarism_service import PlagiarismService
+    import asyncio
+
+    # Run in executor so it doesn't block the event loop
+    loop = asyncio.get_event_loop()
+    result = await loop.run_in_executor(
+        None,
+        PlagiarismService.run_for_assignment,
+        db,
+        assignment_id
+    )
+
+    if "error" in result:
+        return error_response(result["error"], "PLAGIARISM_FAILED", status_code=404)
+
+    return success_response(result, "Plagiarism check completed")
+
+
+@router.get("/assignments/{assignment_id}/plagiarism-report")
+def get_plagiarism_report(
+    assignment_id: int,
+    db: Session = Depends(get_db),
+    current_user = Depends(require_teacher)
+):
+    """
+    Return previously computed plagiarism results for an assignment.
+    No re-computation — reads from DB directly.
+    """
+    from app.services.plagiarism_service import PlagiarismService
+
+    report = PlagiarismService.get_assignment_report(db, assignment_id)
+    return success_response(report, "Plagiarism report retrieved")
