@@ -13,7 +13,7 @@ import { adminAPI } from '../../api/admin.api'
 const CSS = `
   .lb-row {
     display: grid;
-    grid-template-columns: 52px 2fr 160px 100px 90px 120px;
+    grid-template-columns: 52px 2fr 160px 80px 80px 80px 120px;
     align-items: center;
     gap: .5rem;
     padding: .68rem 1rem;
@@ -164,12 +164,13 @@ function StudentModal({ s, onClose }) {
 
         <div style={{ padding: '1rem 1.4rem', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '.55rem' }}>
 
-          {/* Top tiles */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '.5rem' }}>
+          {/* Top tiles - 4 tiles now */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '.5rem' }}>
             {[
-              { label: 'Score',  value: s.academic_score?.toFixed(1) || '—', c: '#5b8af0' },
-              { label: 'Rank',   value: s.rank ? `#${s.rank}` : '—',         c: '#f59e0b' },
-              { label: 'GPA Fx', value: s.score_breakdown?.gpa_factor?.toFixed(1) || '—', c: '#22a06b' },
+              { label: 'Score',      value: s.academic_score?.toFixed(1) || '—',    c: '#5b8af0' },
+              { label: 'Class Rank', value: s.rank ? `#${s.rank}` : '—',            c: '#f59e0b' },
+              { label: 'Sec. Rank',  value: s.section_rank ? `#${s.section_rank}` : '—', c: '#a78bfa' },
+              { label: 'Improve',    value: s.improvement_index ? `${Math.round(s.improvement_index)}` : '—', c: '#3ecf8e' },
             ].map(r => (
               <div key={r.label} style={{ ...tile, textAlign: 'center' }}>
                 <p style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: '.2rem' }}>{r.label}</p>
@@ -279,6 +280,14 @@ function LBRow({ s, idx, onView }) {
         <tc.Icon size={12} style={{ color: tc.c, flexShrink: 0 }} />
         <span style={{ fontSize: '.7rem', fontWeight: 600, color: tc.c }}>{tc.label}</span>
       </div>
+      {/* Section Rank Column */}
+      <span style={{
+        fontSize: '.72rem', fontWeight: 800,
+        color: s.section_rank ? '#a78bfa' : 'var(--neu-text-ghost)',
+        fontFamily: 'Outfit,sans-serif', textAlign: 'center'
+      }}>
+        {s.section_rank ? `#${s.section_rank}` : '—'}
+      </span>
       <MiniBreakdown bd={s.score_breakdown} />
     </div>
   )
@@ -448,9 +457,9 @@ export default function AnalyticsPage() {
 
         ) : tab === 'leaderboard' ? (
           <div style={{ background: 'var(--neu-surface)', border: '1px solid var(--neu-border)', borderRadius: '1.25rem', overflow: 'hidden', boxShadow: '6px 6px 16px var(--neu-shadow-dark), -3px -3px 10px var(--neu-shadow-light)' }}>
-            {/* Table header */}
-            <div style={{ padding: '.6rem 1rem', borderBottom: '1px solid var(--neu-border)', background: 'var(--neu-surface-deep)', display: 'grid', gridTemplateColumns: '52px 2fr 160px 100px 90px 120px', gap: '.5rem' }}>
-              {['Rank', 'Student', 'Score', 'Engagement', 'Trend', 'Breakdown'].map(h => (
+            {/* Table header - updated with S.Rank column */}
+            <div style={{ padding: '.6rem 1rem', borderBottom: '1px solid var(--neu-border)', background: 'var(--neu-surface-deep)', display: 'grid', gridTemplateColumns: '52px 2fr 160px 80px 80px 80px 120px', gap: '.5rem' }}>
+              {['Rank', 'Student', 'Score', 'Engagement', 'Trend', 'S.Rank', 'Breakdown'].map(h => (
                 <span key={h} style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--neu-text-ghost)', textTransform: 'uppercase', letterSpacing: '.06em' }}>{h}</span>
               ))}
             </div>

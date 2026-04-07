@@ -29,6 +29,7 @@ const MENUS = {
     { label: 'Chat',         icon: MessageSquare,   to: '/student/chat' },
     { label: 'AI Assistant', icon: BrainCircuit,    to: '/student/ai' },
     { label: 'Practice Quiz',  icon: Sparkles,        to: '/student/practice-quiz' },
+    { label: 'Analytics', icon: BarChart2, to: '/student/analytics' },
   ],
   teacher: [
     { label: 'Dashboard',    icon: LayoutDashboard, to: '/teacher/dashboard' },

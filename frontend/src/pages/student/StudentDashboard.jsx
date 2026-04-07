@@ -770,8 +770,10 @@ export default function StudentDashboard() {
         {/* Academic Score pill */}
         {acScore > 0 && (
           <div
+            onClick={() => navigate('/student/analytics')}
             style={{
               ...neuInset({
+                cursor: 'pointer',
                 borderRadius: '1rem',
                 padding: '0.7rem 1.1rem',
               }),
