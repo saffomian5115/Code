@@ -8,9 +8,9 @@ import {
 // ── Per-mode defaults ──────────────────────────────────────────────────
 const MODE_CFG = {
   login: {
-    maxAttempts:  5,
-    retryDelay:   1500,
-    scanCooldown: 2500,
+    maxAttempts:  Infinity,   // Keep retrying until face matches
+    retryDelay:   1200,
+    scanCooldown: 2000,
     showCard:     false,
     cardDuration: 2000,
     accentColor:  '#5b8af0',
@@ -116,7 +116,6 @@ function SuccessCard({ data, accentColor, onDone, duration }) {
 //  FailOverlay
 // ══════════════════════════════════════════════════════════════════════
 function FailOverlay({ attempts, maxAttempts, mode }) {
-  const remaining = maxAttempts === Infinity ? null : maxAttempts - attempts
   return (
     <div style={{
       position:'absolute', inset:0, zIndex:18,
@@ -130,55 +129,8 @@ function FailOverlay({ attempts, maxAttempts, mode }) {
       }}>
         <AlertCircle size={20} color="#f87171" style={{ margin:'0 auto 0.32rem', display:'block' }} />
         <p style={{ color:'#f87171', fontWeight:700, fontSize:'0.8rem', margin:0 }}>
-          No face recognized {maxAttempts !== Infinity ? ` — ${attempts}/${maxAttempts} attempts` : ''}
+          No face recognized — retrying...
         </p>
-      </div>
-    </div>
-  )
-}
-
-// ══════════════════════════════════════════════════════════════════════
-//  MaxAttemptsOverlay — login: 5/5 exhausted
-// ══════════════════════════════════════════════════════════════════════
-function MaxAttemptsOverlay({ onClose, onRetry, accentColor }) {
-  return (
-    <div style={{
-      position:'absolute', inset:0, zIndex:25,
-      background:'rgba(0,0,0,0.88)', backdropFilter:'blur(6px)',
-      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-      gap:'0.7rem', borderRadius:'inherit',
-    }}>
-      <div style={{
-        width:50, height:50, borderRadius:'50%',
-        background:'rgba(248,113,113,0.15)', border:'2px solid rgba(248,113,113,0.4)',
-        display:'flex', alignItems:'center', justifyContent:'center',
-      }}>
-        <ShieldOff size={24} color="#f87171" />
-      </div>
-      <p style={{ fontWeight:800, fontSize:'0.98rem', color:'#fff', margin:0, fontFamily:'Outfit,sans-serif', textAlign:'center' }}>
-        5/5 Attempts Complete
-      </p>
-      <p style={{ fontSize:'0.76rem', color:'#94a3b8', margin:0, textAlign:'center', maxWidth:210 }}>
-        Face Not Login۔ Try with Password۔
-      </p>
-      <div style={{ display:'flex', gap:'0.55rem', marginTop:'0.15rem' }}>
-        <button onClick={onRetry} style={{
-          padding:'0.42rem 0.95rem', borderRadius:'0.7rem', cursor:'pointer',
-          border:`1px solid ${accentColor}55`, background:`${accentColor}15`,
-          color:accentColor, fontSize:'0.76rem', fontWeight:700,
-          display:'flex', alignItems:'center', gap:'0.3rem',
-        }}>
-          <RefreshCw size={12} /> Try Again
-        </button>
-        {onClose && (
-          <button onClick={onClose} style={{
-            padding:'0.42rem 0.95rem', borderRadius:'0.7rem', cursor:'pointer',
-            border:'1px solid rgba(255,255,255,0.12)', background:'rgba(255,255,255,0.06)',
-            color:'#94a3b8', fontSize:'0.76rem', fontWeight:600,
-          }}>
-            Close
-          </button>
-        )}
       </div>
     </div>
   )
@@ -243,7 +195,6 @@ export default function FaceScannerWidget({
   const [successData, setSuccessData] = useState(null)
   const [camError,    setCamError]    = useState(null)
   const [attempts,    setAttempts]    = useState(0)
-  const [maxed,       setMaxed]       = useState(false)
 
   const setStatus = useCallback(s => {
     if (!mountedRef.current) return
@@ -333,7 +284,7 @@ export default function FaceScannerWidget({
         setSuccessData(data ?? res?.data)
         setStatus('success')
         if (!CARD) {
-          // login / enroll 
+          // login / enroll — call onSuccess immediately
           onSuccessRef.current?.(data ?? res?.data)
         }
       } else {
@@ -342,12 +293,8 @@ export default function FaceScannerWidget({
         setAttempts(n)
         onFailRef.current?.()
         setStatus('fail')
-
-        if (MAX !== Infinity && n >= MAX) {
-          setMaxed(true)
-        } else {
-          setTimeout(() => { if (mountedRef.current) setStatus('scanning') }, RDLY)
-        }
+        // Always retry — no max limit
+        setTimeout(() => { if (mountedRef.current) setStatus('scanning') }, RDLY)
       }
     } catch {
       const n = attemptsRef.current + 1
@@ -355,16 +302,12 @@ export default function FaceScannerWidget({
       setAttempts(n)
       onFailRef.current?.()
       setStatus('fail')
-      if (MAX !== Infinity && n >= MAX) {
-        setMaxed(true)
-      } else {
-        setTimeout(() => { if (mountedRef.current) setStatus('scanning') }, RDLY)
-      }
+      // Always retry
+      setTimeout(() => { if (mountedRef.current) setStatus('scanning') }, RDLY)
     } finally {
       processingRef.current = false
     }
-  }, [mode, COOL, CARD, MAX, RDLY, captureFace, setStatus])
-  //   ↑ apiCall, onSuccess, onFail yahan nahi hain — refs handle karte hain
+  }, [mode, COOL, CARD, RDLY, captureFace, setStatus])
 
   // ── Gate: success card done → reset + continue ───────────────────────
   const handleCardDone = useCallback(() => {
@@ -378,7 +321,6 @@ export default function FaceScannerWidget({
     stopAll()
     setStatus('loading')
     setCamError(null)
-    setMaxed(false)
     setSuccessData(null)
     attemptsRef.current   = 0
     setAttempts(0)
@@ -462,13 +404,12 @@ export default function FaceScannerWidget({
     : '8px 8px 20px rgba(0,0,0,.12), -4px -4px 10px rgba(255,255,255,.9)'
 
   // ── Status bar ────────────────────────────────────────────────────────
-  const attemptStr  = MAX !== Infinity ? ` (${attempts}/${MAX})` : ''
   const statusLabel = {
     loading:    '⏳ Camera is starting...',
-    scanning:   `🎯 Scanning${attemptStr}…`,
-    processing: '🔄 Verifing...',
-    success:    '✅ Face Match!',
-    fail:       maxed ? '🚫 Max attempts reached' : '❌ Not Recognize — retry…',
+    scanning:   `🎯 Scanning — position your face...`,
+    processing: '🔄 Verifying...',
+    success:    '✅ Face Matched!',
+    fail:       '❌ Not recognized — retrying...',
   }[status] ?? ''
 
   const statusColor = {
@@ -519,7 +460,7 @@ export default function FaceScannerWidget({
           </div>
           <div>
             <p style={{ fontWeight:700, fontSize:'0.84rem', color:txtPri, margin:0 }}>{TTL}</p>
-            <p style={{ fontSize:'0.69rem', color:txtMut, margin:0 }}>{SUB}</p>
+            <p style={{ fontSize:'0.69rem', color:txtMut, margin:0 }}>{SUB || 'Keep your face in frame'}</p>
           </div>
         </div>
         {onClose && (
@@ -539,7 +480,7 @@ export default function FaceScannerWidget({
         border: ringBorder, boxShadow: ringGlow,
         transition:'border-color .3s, box-shadow .3s',
         animation: status === 'scanning' ? 'fsw-ring-scan 2s ease-in-out infinite'
-          : status === 'fail' && !maxed   ? 'fsw-ring-fail 0.6s ease-out'
+          : status === 'fail'            ? 'fsw-ring-fail 0.6s ease-out'
           : 'none',
       }}>
         <video ref={videoRef}
@@ -584,18 +525,9 @@ export default function FaceScannerWidget({
           </div>
         )}
 
-        {/* Fail overlay */}
-        {status === 'fail' && !maxed && (
+        {/* Fail overlay — always shows retry message */}
+        {status === 'fail' && (
           <FailOverlay attempts={attempts} maxAttempts={MAX} mode={mode} />
-        )}
-
-        {/* Max attempts — login only */}
-        {maxed && (
-          <MaxAttemptsOverlay
-            accentColor={ACC}
-            onRetry={boot}
-            onClose={onClose ? () => { stopAll(); onClose() } : undefined}
-          />
         )}
 
         {/* Success card — gate mode */}
@@ -615,6 +547,17 @@ export default function FaceScannerWidget({
             textAlign:'center', fontSize:'0.68rem', color:'#f87171',
           }}>
             {camError}
+            <button
+              onClick={boot}
+              style={{
+                display:'block', margin:'0.4rem auto 0',
+                background:'rgba(248,113,113,0.15)', border:'1px solid rgba(248,113,113,0.3)',
+                color:'#f87171', borderRadius:'0.5rem', padding:'0.25rem 0.75rem',
+                fontSize:'0.68rem', fontWeight:700, cursor:'pointer',
+              }}
+            >
+              Retry Camera
+            </button>
           </div>
         )}
       </div>
@@ -635,6 +578,12 @@ export default function FaceScannerWidget({
             width:8, height:8, borderRadius:'50%', background:ACC,
             animation:'fsw-pulse 1.4s ease-in-out infinite',
           }} />
+        )}
+        {/* Attempt counter for fail state */}
+        {status === 'fail' && attempts > 0 && (
+          <span style={{ fontSize:'0.65rem', color:'#f87171', opacity:0.7 }}>
+            Attempt {attempts}
+          </span>
         )}
       </div>
     </div>

@@ -33,6 +33,7 @@ import ResultsPage from "./pages/teacher/ResultsPage";
 import TeacherAnnouncementsPage from "./pages/teacher/TeacherAnnouncementsPage";
 import ChatPage from "./pages/teacher/ChatPage";
 import TeacherNoticesPage from './pages/teacher/TeacherNoticesPage'
+import ClassAnalyticsPage from "./pages/teacher/ClassAnalyticsPage";
 
 
 // Phase 3: Student Pages
@@ -158,6 +159,7 @@ export default function App() {
                   <Route path="quizzes" element={<QuizzesPage />} />
                   <Route path="results" element={<ResultsPage />} />
                   <Route path="notices" element={<TeacherNoticesPage />} />
+                  <Route path="analytics" element={<ClassAnalyticsPage />} />
                   <Route
                     path="announcements"
                     element={<TeacherAnnouncementsPage />}

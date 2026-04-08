@@ -9,7 +9,7 @@ import { createPortal } from 'react-dom'
 import { authStore } from '../../store/authStore'
 import {
   LayoutDashboard, BookOpen, FileText, BarChart2, CreditCard,
-  Bell, MessageSquare, Users, GraduationCap, Building2,
+  Bell, MessageSquare, Users, GraduationCap, Building2,BarChart3,
   Calendar, ClipboardCheck, PenSquare, BrainCircuit,Sparkles,
   BookMarked, Layers, Receipt, DoorOpen, LineChart, ScanLine,
 } from 'lucide-react'
@@ -38,6 +38,7 @@ const MENUS = {
     { label: 'Assignments',  icon: FileText,        to: '/teacher/assignments' },
     { label: 'Quizzes',      icon: PenSquare,       to: '/teacher/quizzes' },
     { label: 'Results',      icon: BarChart2,       to: '/teacher/results' },
+    { label: 'Analytics', icon: BarChart3, to: '/teacher/analytics' },
     { label: 'Announcements',icon: Bell,            to: '/teacher/announcements' },
     { label: 'Notices',      icon: FileText,        to: '/teacher/notices' },
     { label: 'Chat',         icon: MessageSquare,   to: '/teacher/chat' },

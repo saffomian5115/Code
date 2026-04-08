@@ -211,11 +211,6 @@ export const teacherAPI = {
   getChatGroupDetail: (groupId) =>
     api.get(`/chat/groups/${groupId}`),
 
-
-  // ════════════════════════════════════════════════
-  // TEACHER PROFILE
-  // ════════════════════════════════════════════════
-
   /** GET /teachers/me — own profile */
   getProfile: () =>
     api.get('/teachers/me'),
@@ -223,6 +218,30 @@ export const teacherAPI = {
   /** PUT /teachers/me — update profile */
   updateProfile: (data) =>
     api.put('/teachers/me', data),
+
+  /** GET /analytics/semester/:id/leaderboard */
+  getClassLeaderboard: (semesterId, limit = 50) =>
+    api.get(`/analytics/semester/${semesterId}/leaderboard?limit=${limit}`),
+
+  /** GET /analytics/semester/:id/at-risk */
+  getAtRiskStudents: (semesterId) =>
+    api.get(`/analytics/semester/${semesterId}/at-risk`),
+
+  /** GET /analytics/students/:id?semester_id=X */
+  getStudentAnalytics: (studentId, semesterId) =>
+    api.get(`/analytics/students/${studentId}?semester_id=${semesterId}`),
+
+  /** POST /analytics/calculate */
+  calculateStudentAnalytics: (studentId, semesterId) =>
+    api.post('/analytics/calculate', { student_id: studentId, semester_id: semesterId }),
+
+  /** GET /offerings/:id/attendance-report */
+  getAttendanceReport: (offeringId) =>
+    api.get(`/offerings/${offeringId}/attendance-report`),
+
+  /** GET /semesters */
+  getSemesters: () =>
+    api.get('/semesters'),
 
 }
 
