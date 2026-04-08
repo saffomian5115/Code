@@ -2,6 +2,7 @@
 RAG Service (Retrieval-Augmented Generation)
 FAQs aur student data ko vector store mein rakh ke relevant context dhundta hai
 FAISS use karta hai fast similarity search ke liye
+Real student data ko properly format karta hai
 """
 import numpy as np
 from sqlalchemy.orm import Session
@@ -24,7 +25,7 @@ class RAGService:
         """
         Student ke question ke liye relevant context tayyar karo:
         1. FAQs mein se top matches dhundho
-        2. Student ki personal data add karo
+        2. Student ki real personal data add karo
         """
         # FAQs fetch karo
         faqs = db.query(ChatbotFAQ).filter(
@@ -54,7 +55,6 @@ class RAGService:
         faq_embeddings = EmbeddingService.encode(faq_texts)
 
         if FAISS_AVAILABLE:
-            # FAISS ke saath fast search
             dim = faq_embeddings.shape[1]
             index = faiss.IndexFlatIP(dim)
             index.add(faq_embeddings.astype("float32"))
@@ -65,7 +65,6 @@ class RAGService:
                 if float(score) >= threshold
             ]
         else:
-            # Fallback: numpy dot product
             scores = np.dot(faq_embeddings, query_embedding[0])
             top_indices = np.argsort(scores)[::-1][:top_k]
             results = [
@@ -85,20 +84,61 @@ class RAGService:
 
     @staticmethod
     def _format_student_data(data: dict) -> str:
-        """Student ki info ko readable context mein format karo"""
-        name        = data.get("name", "Student")
-        attendance  = data.get("attendance", "N/A")
-        cgpa        = data.get("cgpa", "N/A")
-        courses     = data.get("courses", [])
+        """Student ki real info ko readable context mein format karo"""
+        name = data.get("name", "Student")
+        roll = data.get("roll_number", "N/A")
+        program = data.get("program", "N/A")
+        sem_name = data.get("current_semester_name", "N/A")
+        sem_num = data.get("current_semester_number", "N/A")
+        cgpa = data.get("cgpa", "N/A")
+        overall_att = data.get("overall_attendance", "N/A")
         pending_fee = data.get("pending_fee", "N/A")
-        semester    = data.get("semester", "N/A")
+        overdue = data.get("overdue_vouchers", 0)
+        courses = data.get("enrolled_courses", [])
+        att_per_course = data.get("attendance_per_course", {})
+        short_att = data.get("short_attendance_courses", [])
+        current_grades = data.get("current_grades", {})
 
         courses_str = ", ".join(courses) if courses else "N/A"
 
-        return f"""Student Profile:
+        # Attendance detail per course
+        att_details = ""
+        if att_per_course:
+            att_lines = []
+            for course, info in att_per_course.items():
+                status = "⚠️ SHORT" if info["percentage"] < 75 else "✓ OK"
+                att_lines.append(
+                    f"  - {course}: {info['percentage']}% "
+                    f"({info['attended']}/{info['total']} classes) {status}"
+                )
+            att_details = "\nAttendance per Course:\n" + "\n".join(att_lines)
+
+        # Grades detail
+        grades_detail = ""
+        if current_grades:
+            g_lines = []
+            for course, g in current_grades.items():
+                g_lines.append(f"  - {course}: {g['grade']} ({g['gpa_points']} GP)")
+            grades_detail = "\nCurrent Grades:\n" + "\n".join(g_lines)
+
+        # Short attendance warning
+        short_warning = ""
+        if short_att:
+            short_warning = f"\n⚠️ SHORT ATTENDANCE (below 75%): {', '.join(short_att)}"
+
+        # Fee warning
+        fee_warning = ""
+        if overdue > 0:
+            fee_warning = f"\n⚠️ {overdue} overdue fee voucher(s)"
+
+        context = f"""Student Profile:
 - Name: {name}
-- Current Semester: {semester}
+- Roll Number: {roll}
+- Program: {program}
+- Semester: {sem_name} (Semester {sem_num})
 - CGPA: {cgpa}
-- Overall Attendance: {attendance}%
-- Pending Fee: {pending_fee}
-- Enrolled Courses: {courses_str}"""
+- Overall Attendance: {overall_att}%
+- Enrolled Courses: {courses_str}
+- Pending Fee: {pending_fee}{fee_warning}{att_details}{grades_detail}{short_warning}"""
+
+        return context
