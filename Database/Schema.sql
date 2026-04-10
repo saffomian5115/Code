@@ -546,7 +546,7 @@ CREATE TABLE quiz_attempts (
 CREATE TABLE ai_quizzes (
     id INT PRIMARY KEY AUTO_INCREMENT,
     student_id INT NOT NULL,
-    course_id INT NOT NULL,
+    course_id INT NULL,
     topic VARCHAR(200),
     difficulty ENUM('easy', 'medium', 'hard') NOT NULL,
     questions_generated JSON,

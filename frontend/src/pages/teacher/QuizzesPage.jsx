@@ -156,6 +156,8 @@ function CreateQuizModal({ offeringId, onClose, onSuccess }) {
   const [loading, setLoading] = useState(false)
   const [step, setStep] = useState(1) // 1 = details, 2 = questions
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+  const [showAIGen, setShowAIGen] = useState(false)
+
 
   const addQuestion = () => setQuestions(p => [...p, EMPTY_QUESTION()])
   const removeQuestion = (i) => setQuestions(p => p.filter((_, idx) => idx !== i))
@@ -166,6 +168,21 @@ function CreateQuizModal({ offeringId, onClose, onSuccess }) {
 
   // Auto-calculate total_marks from questions
   const calcTotal = () => questions.reduce((s, q) => s + (parseInt(q.marks) || 1), 0)
+
+  const handleAIQuestions = (aiQuestions, formData) => {
+  // Convert AI format → quiz question format
+  const converted = aiQuestions.map(q => ({
+    question_text: q.question || q.question_text || '',
+    question_type: 'mcq',
+    options: q.options || ['', '', '', ''],
+    correct_answer: q.correct_answer || '',
+    marks: 1,
+    difficulty: formData.difficulty === 'mixed' ? 'medium' : formData.difficulty,
+  }))
+  setQuestions(converted)
+  setStep(2)  // Jump to questions review step
+  toast.success(`${converted.length} AI questions generated! Review and edit before saving.`)
+}
 
   const handleSubmit = async () => {
     if (!form.title.trim()) { toast.error('Title required'); return }
@@ -329,12 +346,28 @@ function CreateQuizModal({ offeringId, onClose, onSuccess }) {
               </div>
             ))}
 
-            <button onClick={addQuestion}
-              style={{ padding: '0.6rem', borderRadius: '0.875rem', border: `2px dashed var(--neu-border)`, background: 'none', color: '#5b8af0', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontFamily: "'DM Sans',sans-serif", transition: 'background 0.15s' }}
+            
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <button onClick={addQuestion} style={{ padding: '0.6rem', borderRadius: '0.875rem', border: `2px dashed var(--neu-border)`, background: 'none', color: '#5b8af0', fontSize: '0.82rem', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', fontFamily: "'DM Sans',sans-serif", transition: 'background 0.15s' }}
               onMouseEnter={e => e.currentTarget.style.background = 'rgba(91,138,240,0.08)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-              <Plus size={14} /> Add Question
-            </button>
+                          onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                <Plus size={14} /> Add Question
+              </button>
+              <button onClick={() => setShowAIGen(true)}
+                style={{ padding: '0.6rem 1rem', borderRadius: '0.875rem', border: 'none', cursor: 'pointer',
+                  background: 'linear-gradient(145deg,#a78bfa,#7c5cdb)', color: '#fff',
+                  fontSize: '0.8rem', fontWeight: 700, fontFamily: "'DM Sans',sans-serif",
+                  boxShadow: '4px 4px 10px var(--neu-shadow-dark), 0 4px 14px rgba(167,139,250,0.35)',
+                  display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                ✨ AI Generate
+              </button>
+            </div>
+            {showAIGen && (
+  <AIGenerateModal
+    onClose={() => setShowAIGen(false)}
+    onQuestionsReady={handleAIQuestions}
+  />
+)}
           </div>
         )}
       </div>
@@ -360,6 +393,99 @@ function CreateQuizModal({ offeringId, onClose, onSuccess }) {
             </NeuBtn>
           )}
         </div>
+      </div>
+    </Modal>
+  )
+}
+
+function AIGenerateModal({ offeringId, onClose, onQuestionsReady }) {
+  const [form, setForm] = useState({ topic: '', difficulty: 'medium', num_questions: 5, context: '' })
+  const [loading, setLoading] = useState(false)
+  const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+
+  const handleGenerate = async () => {
+    if (!form.topic.trim()) { toast.error('Topic required'); return }
+    setLoading(true)
+    try {
+      // Use the same Gemini endpoint as student practice quiz
+      const res = await api.post('/ai-quiz/generate', {
+        course_id: 0,  // not tied to a specific course
+        topic: form.topic.trim(),
+        difficulty: form.difficulty === 'mixed' ? 'medium' : form.difficulty,
+        num_questions: form.num_questions,
+        // Pass context in topic string if provided
+        ...(form.context.trim() && { topic: `${form.topic.trim()}. Context: ${form.context.trim()}` })
+      })
+      const questions = res.data.data?.questions || res.data.data?.questions_generated || []
+      if (!questions.length) throw new Error('No questions generated')
+      onQuestionsReady(questions, form)
+      onClose()
+    } catch (err) {
+      toast.error(err.response?.data?.message || err.message || 'Generation failed')
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <Modal onClose={onClose}>
+      <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--neu-border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div>
+          <h2 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--neu-text-primary)', fontFamily: 'Outfit,sans-serif' }}>
+            ✨ Generate Questions with AI
+          </h2>
+          <p style={{ fontSize: '0.72rem', color: 'var(--neu-text-ghost)', marginTop: '0.1rem' }}>Powered by Google Gemini</p>
+        </div>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--neu-text-ghost)' }}><X size={18} /></button>
+      </div>
+
+      <div style={{ padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+        <Field label="Topic *">
+          <textarea value={form.topic} onChange={e => set('topic', e.target.value)} rows={2}
+            style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
+            placeholder="e.g. Object Oriented Programming, SQL Joins, Photosynthesis..." autoFocus />
+        </Field>
+
+        <Field label="Difficulty">
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {['easy','medium','hard','mixed'].map(d => (
+              <button key={d} onClick={() => set('difficulty', d)}
+                style={{ padding: '0.4rem 1rem', borderRadius: '0.65rem', border: 'none', cursor: 'pointer',
+                  fontWeight: 700, fontSize: '0.78rem', textTransform: 'capitalize',
+                  background: form.difficulty === d ? 'linear-gradient(145deg,#a78bfa,#7c5cdb)' : 'var(--neu-surface-deep)',
+                  color: form.difficulty === d ? '#fff' : 'var(--neu-text-muted)',
+                  boxShadow: form.difficulty === d ? '3px 3px 8px var(--neu-shadow-dark)' : 'inset 2px 2px 5px var(--neu-shadow-dark)' }}>
+                {d}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field label="Number of Questions">
+          <div style={{ display: 'flex', gap: '0.5rem' }}>
+            {[3, 5, 7, 10].map(n => (
+              <button key={n} onClick={() => set('num_questions', n)}
+                style={{ padding: '0.4rem 1rem', borderRadius: '0.65rem', border: 'none', cursor: 'pointer',
+                  fontWeight: 700, fontSize: '0.82rem',
+                  background: form.num_questions === n ? 'linear-gradient(145deg,#5b8af0,#3a6bd4)' : 'var(--neu-surface-deep)',
+                  color: form.num_questions === n ? '#fff' : 'var(--neu-text-muted)',
+                  boxShadow: form.num_questions === n ? '3px 3px 8px var(--neu-shadow-dark)' : 'inset 2px 2px 5px var(--neu-shadow-dark)' }}>
+                {n}
+              </button>
+            ))}
+          </div>
+        </Field>
+
+        <Field label="Extra context for AI (optional)">
+          <textarea value={form.context} onChange={e => set('context', e.target.value)} rows={2}
+            style={{ ...inputStyle, resize: 'vertical', lineHeight: 1.5 }}
+            placeholder="e.g. Focus on Chapter 3, include code examples, theory only..." />
+        </Field>
+      </div>
+
+      <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid var(--neu-border)', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+        <button onClick={onClose} style={{ ...inputStyle, width: 'auto', padding: '0.6rem 1.1rem', cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem' }}>Cancel</button>
+        <NeuBtn onClick={handleGenerate} loading={loading} accent='#a78bfa'>
+          {loading ? 'Generating…' : '✨ Generate Questions'}
+        </NeuBtn>
       </div>
     </Modal>
   )

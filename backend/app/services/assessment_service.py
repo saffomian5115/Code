@@ -366,7 +366,7 @@ Rules:
 
         ai_quiz = AIQuiz(
             student_id=student_id,
-            course_id=course_id,
+            course_id=data["course_id"] if data.get("course_id") and data["course_id"] != 0 else None,
             topic=topic,
             difficulty=difficulty,
             questions_generated=questions
