@@ -672,11 +672,37 @@ export default function Navbar({ onToggleSidebar }) {
             </svg>
           </button>
 
-          {/* Brand */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', userSelect: 'none' }}>
-            
+          {/* Brand with Role Badge */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', userSelect: 'none' }}>
             <div>
               <p style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--neu-text-primary)', fontFamily: 'Outfit, sans-serif', lineHeight: 1, letterSpacing: '-0.01em', whiteSpace: 'nowrap', margin: 0 }}>AI-Driven Smart LMS</p>
+            </div>
+            
+            {/* Role Badge */}
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              padding: '0.2rem 0.65rem',
+              borderRadius: '99px',
+              background: rc.bg,
+              border: `1px solid ${rc.accent}40`,
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              color: rc.accent,
+              letterSpacing: '0.01em',
+              textTransform: 'uppercase',
+              backdropFilter: 'blur(2px)',
+            }}>
+              <span style={{ 
+                width: 6, 
+                height: 6, 
+                borderRadius: '50%', 
+                background: rc.accent,
+                display: 'inline-block',
+                boxShadow: `0 0 6px ${rc.accent}`
+              }} />
+              {rc.label}
             </div>
           </div>
         </div>
