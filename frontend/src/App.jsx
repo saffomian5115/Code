@@ -22,6 +22,8 @@ import NoticesPage from "./pages/admin/NoticesPage";
 import GatesPage from "./pages/admin/GatesPage";
 import AnalyticsPage from "./pages/admin/AnalyticsPage";
 import GateAttendancePage from "./pages/admin/GateAttendancePage";
+import APIKeysPage from './pages/admin/APIKeysPage'
+
 
 // ── Phase 2: Teacher Pages ──────────────────────────
 import TeacherDashboard from "./pages/teacher/TeacherDashboard";
@@ -132,6 +134,7 @@ export default function App() {
                   <Route path="gates" element={<GatesPage />} />
                   <Route path="gate-attendance" element={<GateAttendancePage />} />
                   <Route path="analytics" element={<AnalyticsPage />} />
+                  <Route path="api-keys" element={<APIKeysPage />} />
                   <Route
                     path="*"
                     element={<Navigate to="/admin/dashboard" replace />}

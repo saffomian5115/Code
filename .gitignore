@@ -1,5 +1,7 @@
 venv
 uploads
 __pycache__
-models
+
 .env
+
+backend/app/ai/gemini_keys.json

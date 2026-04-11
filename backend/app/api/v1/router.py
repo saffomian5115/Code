@@ -5,7 +5,7 @@ from app.api.v1.endpoints import (
     offerings, enrollments, attendance,
     assignments, quizzes, exams, fees,
     announcements, notices, chat,
-    analytics, chatbot, face_recognition
+    analytics, chatbot, face_recognition, api_keys
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -45,3 +45,5 @@ api_router.include_router(chat.router)
 api_router.include_router(analytics.router)
 api_router.include_router(chatbot.router)
 api_router.include_router(face_recognition.router)
+
+api_router.include_router(api_keys.router)

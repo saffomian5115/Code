@@ -11,7 +11,7 @@ import {
   LayoutDashboard, BookOpen, FileText, BarChart2, CreditCard,
   Bell, MessageSquare, Users, GraduationCap, Building2,BarChart3,
   Calendar, ClipboardCheck, PenSquare, BrainCircuit,Sparkles,
-  BookMarked, Layers, Receipt, DoorOpen, LineChart, ScanLine,
+  BookMarked, Layers, Receipt, DoorOpen, LineChart, ScanLine,KeyRound
 } from 'lucide-react'
 
 // ── Nav definitions ───────────────────────────────────────────
@@ -60,6 +60,8 @@ const MENUS = {
     { label: 'Gates',        icon: DoorOpen,        to: '/admin/gates' },
     { label: 'Attendance',   icon: ScanLine,        to: '/admin/gate-attendance' },
     { label: 'Analytics',    icon: LineChart,       to: '/admin/analytics' },
+    { label: 'API Keys', icon: KeyRound, to: '/admin/api-keys' },
+
   ],
 }
 
