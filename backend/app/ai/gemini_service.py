@@ -150,7 +150,7 @@ def _call_gemini(client_tuple, prompt: str) -> str:
     kind, client = client_tuple
     if kind == "new":
         response = client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             contents=prompt
         )
         return response.text.strip()

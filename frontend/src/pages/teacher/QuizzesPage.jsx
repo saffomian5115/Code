@@ -399,9 +399,12 @@ function CreateQuizModal({ offeringId, onClose, onSuccess }) {
 }
 
 function AIGenerateModal({ offeringId, onClose, onQuestionsReady }) {
-  const [form, setForm] = useState({ topic: '', difficulty: 'medium', num_questions: 5, context: '' })
+const [form, setForm] = useState({ 
+  topic: '', difficulty: 'medium', num_questions: 5, context: '', customCount: '' 
+})
   const [loading, setLoading] = useState(false)
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }))
+  
 
   const handleGenerate = async () => {
     if (!form.topic.trim()) { toast.error('Topic required'); return }
@@ -459,20 +462,47 @@ function AIGenerateModal({ offeringId, onClose, onQuestionsReady }) {
           </div>
         </Field>
 
-        <Field label="Number of Questions">
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
-            {[3, 5, 7, 10].map(n => (
-              <button key={n} onClick={() => set('num_questions', n)}
-                style={{ padding: '0.4rem 1rem', borderRadius: '0.65rem', border: 'none', cursor: 'pointer',
-                  fontWeight: 700, fontSize: '0.82rem',
-                  background: form.num_questions === n ? 'linear-gradient(145deg,#5b8af0,#3a6bd4)' : 'var(--neu-surface-deep)',
-                  color: form.num_questions === n ? '#fff' : 'var(--neu-text-muted)',
-                  boxShadow: form.num_questions === n ? '3px 3px 8px var(--neu-shadow-dark)' : 'inset 2px 2px 5px var(--neu-shadow-dark)' }}>
-                {n}
-              </button>
-            ))}
-          </div>
-        </Field>
+        <Field label="Number of Questions (max 50)">
+  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+    {[3, 5, 7, 10].map(n => (
+      <button key={n} onClick={() => { set('num_questions', n); set('customCount', '') }}
+        style={{
+          padding: '0.4rem 1rem', borderRadius: '0.65rem', border: 'none', cursor: 'pointer',
+          fontWeight: 700, fontSize: '0.82rem',
+          background: form.num_questions === n && !form.customCount
+            ? 'linear-gradient(145deg,#5b8af0,#3a6bd4)' : 'var(--neu-surface-deep)',
+          color: form.num_questions === n && !form.customCount ? '#fff' : 'var(--neu-text-muted)',
+          boxShadow: form.num_questions === n && !form.customCount
+            ? '3px 3px 8px var(--neu-shadow-dark)' : 'inset 2px 2px 5px var(--neu-shadow-dark)',
+        }}>
+        {n}
+      </button>
+    ))}
+
+    {/* Custom number input */}
+    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+      <input
+        type="number"
+        min={1}
+        max={50}
+        value={form.customCount || ''}
+        onChange={e => {
+          const val = Math.min(50, Math.max(1, parseInt(e.target.value) || ''))
+          set('customCount', e.target.value)
+          if (val) set('num_questions', val)
+        }}
+        placeholder="Custom"
+        style={{
+          ...inputStyle,
+          width: 90,
+          padding: '0.4rem 0.65rem',
+          border: form.customCount ? '1.5px solid #5b8af0' : '1px solid var(--neu-border)',
+        }}
+      />
+      <span style={{ fontSize: '0.7rem', color: 'var(--neu-text-ghost)' }}>max 50</span>
+    </div>
+  </div>
+</Field>
 
         <Field label="Extra context for AI (optional)">
           <textarea value={form.context} onChange={e => set('context', e.target.value)} rows={2}
@@ -646,7 +676,7 @@ function ResultsModal({ quiz, onClose }) {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
-                    {['#', 'Student', 'Roll No', 'Score', 'Percentage', 'Status', 'Time Taken'].map(h => (
+                    {['#', 'Student', 'Roll No', 'Score', 'Percentage'].map(h => (
                       <th key={h} style={thStyle}>{h}</th>
                     ))}
                   </tr>
@@ -678,12 +708,7 @@ function ResultsModal({ quiz, onClose }) {
                             <span style={{ fontWeight: 700, color, fontSize: '0.8rem' }}>{pct.toFixed(1)}%</span>
                           </div>
                         </td>
-                        <td style={tdStyle}>
-                          <span style={{ fontSize: '0.7rem', fontWeight: 700, padding: '0.2rem 0.5rem', borderRadius: '0.4rem', background: a.status === 'completed' ? 'rgba(62,207,142,0.1)' : 'rgba(91,138,240,0.1)', color: a.status === 'completed' ? '#3ecf8e' : '#5b8af0', textTransform: 'capitalize' }}>
-                            {a.status}
-                          </span>
-                        </td>
-                        <td style={{ ...tdStyle, fontSize: '0.75rem', color: 'var(--neu-text-ghost)' }}>{timeTaken}</td>
+                        
                       </tr>
                     )
                   })}
