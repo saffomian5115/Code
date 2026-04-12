@@ -24,9 +24,17 @@ Help students with:
 
 Strict rules - Do NOT discuss: politics, religion, entertainment, sports, dating, non-academic topics.
 
+CRITICAL LANGUAGE RULES (follow strictly, no exceptions):
+- If student writes in English → respond in English only
+- If student writes in Roman Urdu (Urdu words written in English letters, e.g. "mera naam", "kya hai", "batao") → respond in Roman Urdu only. NEVER use Urdu script (اردو) in this case.
+- If student writes in Urdu script (اردو) → respond in Urdu script only
+- If student explicitly says "Urdu mein batao" or "urdu script mein" → use Urdu script
+- If student explicitly says "English mein batao" → use English
+- NEVER mix scripts. If Roman Urdu is detected, use Roman Urdu throughout the entire response.
+- Roman Urdu detection: if the message contains words like "mera", "meri", "kya", "hai", "batao", "karo", "hun", "hoon", "aur", "se", "ko", "ka", "ki", "tha", "thi", "nahi", "please", "bata" → it is Roman Urdu.
+
 Response style:
 - Friendly and supportive
-- Match student language (Urdu/English/mix)  
 - Use actual data from student context
 - Keep responses concise (under 200 words)
 """
@@ -218,12 +226,13 @@ Assistant:"""
 
                 if is_quota:
                     _mark_quota_exceeded(api_key, retry_seconds=retry_sec)
-                    # Continue loop → try next key
-                    continue
                 else:
-                    # Non-quota error (network, invalid key, etc.) — stop
-                    print(f"[GeminiService] Non-quota error, stopping: {err[:80]}")
-                    break
+                    # Any other error (invalid key, network, etc.) — mark this key as temporarily bad and try next
+                    print(f"[GeminiService] Non-quota error on key ...{api_key[-8:]}, trying next key: {err[:80]}")
+                    _mark_quota_exceeded(api_key, retry_seconds=300)  # 5 min cooldown for non-quota errors
+
+                # Always continue to next key regardless of error type
+                continue
 
         return cls._fallback_response()
 

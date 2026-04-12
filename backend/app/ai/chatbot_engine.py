@@ -62,11 +62,21 @@ class ChatbotEngine:
         from app.models.academic import Semester
 
         # ── Basic Info ────────────────────────────────────
+        # ── Basic Info ────────────────────────────────────
         try:
             user = db.query(User).filter(User.id == student_id).first()
-            name = user.full_name if user else "Student"
-            roll_number = user.roll_number if user else "N/A"
-        except Exception:
+            roll_number = user.roll_number if user and user.roll_number else "N/A"
+            # full_name is in student_profile, not on User model directly
+            if user and user.student_profile and user.student_profile.full_name:
+                name = user.student_profile.full_name
+            elif user and user.teacher_profile and user.teacher_profile.full_name:
+                name = user.teacher_profile.full_name
+            elif user and user.email:
+                name = user.email.split('@')[0]
+            else:
+                name = "Student"
+        except Exception as e:
+            print(f"[ChatbotEngine] get_student_data basic info error: {e}")
             name = "Student"
             roll_number = "N/A"
 
